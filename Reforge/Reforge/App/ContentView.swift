@@ -3,15 +3,47 @@ import SwiftData
 
 struct ContentView: View {
     @Query private var profiles: [UserProfile]
+    @Query(filter: #Predicate<Plan> { $0.isActive }) private var activePlans: [Plan]
+    @State private var recoveryViewModel: OnboardingViewModel?
 
     var body: some View {
-        if profiles.first != nil {
-            MainTabView()
+        if let profile = profiles.first {
+            if activePlans.first != nil {
+                MainTabView()
+            } else {
+                PlanGenerationView(
+                    viewModel: recoveryViewModel(for: profile),
+                    existingProfile: profile
+                )
+            }
         } else {
             OnboardingContainerView()
         }
     }
+
+    private func recoveryViewModel(for profile: UserProfile) -> OnboardingViewModel {
+        if let existing = recoveryViewModel {
+            return existing
+        }
+        let vm = OnboardingViewModel()
+        vm.name = profile.name
+        vm.heightCm = profile.heightCm
+        vm.weightKg = profile.weightKg
+        vm.age = profile.age
+        vm.biologicalSex = profile.biologicalSex
+        vm.activityLevel = ActivityLevel(rawValue: profile.activityLevel) ?? .moderatelyActive
+        vm.goal = GoalType(rawValue: profile.goal) ?? .recomposition
+        vm.availableDays = profile.availableDaysPerWeek
+        vm.sessionLength = profile.sessionLengthMinutes
+        vm.dietaryRestrictions = Set(
+            profile.dietaryRestrictions.compactMap { DietaryRestriction(rawValue: $0) }
+        )
+        recoveryViewModel = vm
+        return vm
+    }
 }
+
+// MARK: - Main Tab View
 
 // Placeholder — built out in Step 1.5
 struct MainTabView: View {
@@ -28,6 +60,8 @@ struct MainTabView: View {
         }
     }
 }
+
+// MARK: - Previews
 
 #Preview("Onboarding") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)

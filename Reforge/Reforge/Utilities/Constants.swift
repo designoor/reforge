@@ -3,7 +3,7 @@ import Foundation
 enum AppConstants {
     static let claudeAPIBaseURL = "https://api.anthropic.com/v1/messages"
     static let claudeModel = "claude-sonnet-4-20250514"
-    static let maxTokens = 4096
+    static let maxTokens = 8192
 }
 
 enum ExerciseType: String, Codable, CaseIterable {

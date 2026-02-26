@@ -49,6 +49,7 @@ Pods/
 *.xcconfig
 .env
 .env.*
+**/Secrets.swift
 
 # Misc
 *.moved-aside
