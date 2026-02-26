@@ -91,6 +91,14 @@ actor ClaudeAPIService {
 
     func generatePlan(from payload: OnboardingPayload) async throws -> PlanResponse {
         let apiKey = Secrets.claudeAPIKey
+
+        #if DEBUG
+        if apiKey == "YOUR_API_KEY_HERE" || apiKey.isEmpty {
+            try await Task.sleep(for: .seconds(1.5))
+            return MockData.planResponse
+        }
+        #endif
+
         guard apiKey != "YOUR_API_KEY_HERE", !apiKey.isEmpty else {
             throw APIError.missingAPIKey
         }

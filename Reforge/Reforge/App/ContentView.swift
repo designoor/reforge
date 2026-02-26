@@ -45,12 +45,14 @@ struct ContentView: View {
 
 // MARK: - Main Tab View
 
-// Placeholder — built out in Step 1.5
 struct MainTabView: View {
     var body: some View {
         TabView {
-            Text("Dashboard")
-                .tabItem { Label("Home", systemImage: "house.fill") }
+            NavigationStack {
+                DashboardView()
+            }
+            .tabItem { Label("Home", systemImage: "house.fill") }
+
             Text("Nutrition")
                 .tabItem { Label("Nutrition", systemImage: "fork.knife") }
             Text("Progress")
