@@ -1,20 +1,9 @@
-# Created by https://www.toptal.com/developers/gitignore/api/osx,macos,xcode
-# Edit at https://www.toptal.com/developers/gitignore?templates=osx,macos,xcode
-
-### macOS ###
-# General
+# macOS
 .DS_Store
 .AppleDouble
 .LSOverride
-
-# Icon must end with two \r
 Icon
-
-
-# Thumbnails
 ._*
-
-# Files that might appear in the root of a volume
 .DocumentRevisions-V100
 .fseventsd
 .Spotlight-V100
@@ -22,42 +11,47 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
-
-# Directories potentially created on remote AFP share
 .AppleDB
 .AppleDesktop
 Network Trash Folder
 Temporary Items
 .apdisk
-
-### macOS Patch ###
-# iCloud generated files
 *.icloud
 
-### OSX ###
-# General
-
-# Icon must end with two \r
-
-# Thumbnails
-
-# Files that might appear in the root of a volume
-
-# Directories potentially created on remote AFP share
-
-### Xcode ###
-## User settings
+# Xcode
 xcuserdata/
-
-## Xcode 8 and earlier
 *.xcscmblueprint
 *.xccheckout
-
-### Xcode Patch ###
 *.xcodeproj/*
 !*.xcodeproj/project.pbxproj
 !*.xcodeproj/xcshareddata/
 !*.xcodeproj/project.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
-/*.gcno
 **/xcshareddata/WorkspaceSettings.xcsettings
+
+# Build
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+*.gcno
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+
+# Secrets / API keys
+*.xcconfig
+.env
+.env.*
+
+# Misc
+*.moved-aside
+*.hmap
+*.playground/timeline.xctimeline
+*.playground/playground.xcworkspace
