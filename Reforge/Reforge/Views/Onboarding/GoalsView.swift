@@ -52,10 +52,9 @@ private struct GoalCard: View {
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.tint)
-                }
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.tint)
+                    .opacity(isSelected ? 1 : 0)
             }
             .padding()
             .background(
