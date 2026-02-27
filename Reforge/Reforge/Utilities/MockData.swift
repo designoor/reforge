@@ -20,7 +20,8 @@ enum MockData {
                             targetReps: "12-15",
                             restSeconds: 60,
                             formCues: "Keep core tight, elbows at 45 degrees, full range of motion",
-                            muscleGroups: ["chest", "triceps", "anterior deltoids"]
+                            muscleGroups: ["chest", "triceps", "anterior deltoids"],
+                            modelId: "pushup"
                         ),
                         ExerciseData(
                             name: "Diamond Push-Ups",
@@ -28,7 +29,8 @@ enum MockData {
                             targetReps: "8-12",
                             restSeconds: 60,
                             formCues: "Hands form a diamond under chest, elbows stay close to body",
-                            muscleGroups: ["triceps", "chest"]
+                            muscleGroups: ["triceps", "chest"],
+                            modelId: "diamond_pushup"
                         ),
                         ExerciseData(
                             name: "Pike Push-Ups",
@@ -36,7 +38,8 @@ enum MockData {
                             targetReps: "8-10",
                             restSeconds: 90,
                             formCues: "Hips high, head between arms, lower crown of head toward floor",
-                            muscleGroups: ["shoulders", "triceps"]
+                            muscleGroups: ["shoulders", "triceps"],
+                            modelId: "pike_pushup"
                         ),
                         ExerciseData(
                             name: "Tricep Dips (on chair)",
@@ -44,7 +47,8 @@ enum MockData {
                             targetReps: "10-12",
                             restSeconds: 60,
                             formCues: "Keep back close to the edge, lower until elbows at 90 degrees",
-                            muscleGroups: ["triceps", "chest", "anterior deltoids"]
+                            muscleGroups: ["triceps", "chest", "anterior deltoids"],
+                            modelId: "tricep_dip"
                         )
                     ]
                 ),
@@ -61,7 +65,8 @@ enum MockData {
                             targetReps: "15-20",
                             restSeconds: 60,
                             formCues: "Chest up, knees track over toes, squat to parallel or below",
-                            muscleGroups: ["quadriceps", "glutes", "hamstrings"]
+                            muscleGroups: ["quadriceps", "glutes", "hamstrings"],
+                            modelId: "squat"
                         ),
                         ExerciseData(
                             name: "Bulgarian Split Squats",
@@ -69,7 +74,8 @@ enum MockData {
                             targetReps: "10-12 each leg",
                             restSeconds: 60,
                             formCues: "Rear foot elevated on chair, front knee stays behind toes",
-                            muscleGroups: ["quadriceps", "glutes"]
+                            muscleGroups: ["quadriceps", "glutes"],
+                            modelId: "split_squat"
                         ),
                         ExerciseData(
                             name: "Glute Bridges",
@@ -77,7 +83,8 @@ enum MockData {
                             targetReps: "15-20",
                             restSeconds: 45,
                             formCues: "Drive through heels, squeeze glutes at top, pause 2 seconds",
-                            muscleGroups: ["glutes", "hamstrings"]
+                            muscleGroups: ["glutes", "hamstrings"],
+                            modelId: "glute_bridge"
                         ),
                         ExerciseData(
                             name: "Calf Raises",
@@ -85,7 +92,8 @@ enum MockData {
                             targetReps: "20-25",
                             restSeconds: 30,
                             formCues: "Full range of motion, pause at top, slow descent",
-                            muscleGroups: ["calves"]
+                            muscleGroups: ["calves"],
+                            modelId: "calf_raise"
                         )
                     ]
                 ),
@@ -102,7 +110,8 @@ enum MockData {
                             targetReps: "8-12",
                             restSeconds: 60,
                             formCues: "Body straight like a plank, pull chest to edge of table",
-                            muscleGroups: ["back", "biceps", "rear deltoids"]
+                            muscleGroups: ["back", "biceps", "rear deltoids"],
+                            modelId: "inverted_row"
                         ),
                         ExerciseData(
                             name: "Superman Holds",
@@ -110,7 +119,8 @@ enum MockData {
                             targetReps: "30s",
                             restSeconds: 45,
                             formCues: "Lift arms and legs simultaneously, squeeze lower back",
-                            muscleGroups: ["lower back", "glutes"]
+                            muscleGroups: ["lower back", "glutes"],
+                            modelId: "superman"
                         ),
                         ExerciseData(
                             name: "Plank",
@@ -118,7 +128,8 @@ enum MockData {
                             targetReps: "45s",
                             restSeconds: 45,
                             formCues: "Straight line from head to heels, engage core, don't sag hips",
-                            muscleGroups: ["core", "shoulders"]
+                            muscleGroups: ["core", "shoulders"],
+                            modelId: "plank"
                         ),
                         ExerciseData(
                             name: "Dead Bug",
@@ -126,7 +137,8 @@ enum MockData {
                             targetReps: "10 each side",
                             restSeconds: 45,
                             formCues: "Press lower back into floor, extend opposite arm and leg slowly",
-                            muscleGroups: ["core", "hip flexors"]
+                            muscleGroups: ["core", "hip flexors"],
+                            modelId: "dead_bug"
                         )
                     ]
                 ),
@@ -143,7 +155,8 @@ enum MockData {
                             targetReps: "10",
                             restSeconds: 45,
                             formCues: "Chest to floor, explosive jump at top, land softly",
-                            muscleGroups: ["full body"]
+                            muscleGroups: ["full body"],
+                            modelId: "burpee"
                         ),
                         ExerciseData(
                             name: "Mountain Climbers",
@@ -151,7 +164,8 @@ enum MockData {
                             targetReps: "30s",
                             restSeconds: 30,
                             formCues: "Hands under shoulders, drive knees quickly, keep hips level",
-                            muscleGroups: ["core", "hip flexors", "shoulders"]
+                            muscleGroups: ["core", "hip flexors", "shoulders"],
+                            modelId: "mountain_climber"
                         ),
                         ExerciseData(
                             name: "Jump Squats",
@@ -159,7 +173,8 @@ enum MockData {
                             targetReps: "12",
                             restSeconds: 45,
                             formCues: "Squat deep then explode up, land softly with bent knees",
-                            muscleGroups: ["quadriceps", "glutes", "calves"]
+                            muscleGroups: ["quadriceps", "glutes", "calves"],
+                            modelId: "jump_squat"
                         ),
                         ExerciseData(
                             name: "High Knees",
@@ -167,7 +182,8 @@ enum MockData {
                             targetReps: "30s",
                             restSeconds: 30,
                             formCues: "Drive knees above hip height, pump arms, stay on balls of feet",
-                            muscleGroups: ["hip flexors", "calves", "core"]
+                            muscleGroups: ["hip flexors", "calves", "core"],
+                            modelId: "high_knees"
                         )
                     ]
                 )

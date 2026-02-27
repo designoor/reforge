@@ -243,7 +243,8 @@ actor ClaudeAPIService {
                     "targetReps": "<string, e.g. '8-12' or '30s'>",
                     "restSeconds": <integer>,
                     "formCues": "<string with key form tips>",
-                    "muscleGroups": ["<string>"]
+                    "muscleGroups": ["<string>"],
+                    "modelId": "<string, snake_case identifier for 3D model e.g. 'pushup', 'squat', 'plank', 'burpee'>"
                   }
                 ]
               }

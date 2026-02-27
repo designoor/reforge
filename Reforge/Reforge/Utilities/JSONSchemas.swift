@@ -44,6 +44,7 @@ struct ExerciseData: Codable, Sendable {
     let restSeconds: Int
     let formCues: String
     let muscleGroups: [String]
+    let modelId: String
 }
 
 struct MealPlanData: Codable, Sendable {

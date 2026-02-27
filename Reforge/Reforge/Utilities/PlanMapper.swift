@@ -63,6 +63,7 @@ enum PlanMapper {
                     targetReps: exData.targetReps,
                     restSeconds: exData.restSeconds,
                     formCues: exData.formCues,
+                    modelId: exData.modelId,
                     orderIndex: exIndex,
                     muscleGroups: exData.muscleGroups
                 )

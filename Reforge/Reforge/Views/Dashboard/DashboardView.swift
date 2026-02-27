@@ -63,7 +63,7 @@ struct DashboardView: View {
         Group {
             if let workout = viewModel.todaysWorkout {
                 NavigationLink {
-                    WorkoutSessionPlaceholderView(workout: workout)
+                    WorkoutSessionView(workout: workout)
                 } label: {
                     HStack(spacing: 16) {
                         Image(systemName: iconForWorkoutType(workout.type))
