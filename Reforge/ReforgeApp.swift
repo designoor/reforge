@@ -10,6 +10,7 @@ struct ReforgeApp: App {
             Item.self,
             UserProfile.self,
             DailySummary.self,
+            WorkoutSummary.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

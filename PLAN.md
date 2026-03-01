@@ -310,7 +310,7 @@ Internal storage is always metric. Display conversion handled by `UnitConverter`
 
 **Verify**: Can create, save, and fetch a `UserProfile` from SwiftData. Persists across app restarts.
 
-#### Step 2.3 — DailySummary Model
+#### Step 2.3 — DailySummary Model ✅
 
 SwiftData `@Model` class. One row per day. Properties:
 
