@@ -483,9 +483,9 @@ This is a stub for now — will be fully implemented when Claude integration is 
 
 ---
 
-### Phase 4: HealthKit Service
+### Phase 4: HealthKit Service ✅
 
-#### Step 4.1 — HealthKitManager: Availability & Authorization
+#### Step 4.1 — HealthKitManager: Availability & Authorization ✅
 
 `HealthKitManager.swift` — singleton or environment object.
 
@@ -499,7 +499,7 @@ This is a stub for now — will be fully implemented when Claude integration is 
 
 **Verify**: Calling `requestAuthorization()` triggers the HealthKit permission sheet on a real device. All 49 types + workout type are listed.
 
-#### Step 4.2 — HealthKitManager: Characteristic Queries
+#### Step 4.2 — HealthKitManager: Characteristic Queries ✅
 
 - `getDateOfBirth() throws -> Date?` — reads `healthStore.dateOfBirthComponents()`.
 - `getBiologicalSex() throws -> HKBiologicalSex?` — reads `healthStore.biologicalSex()`.
