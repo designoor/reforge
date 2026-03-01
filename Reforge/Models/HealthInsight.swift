@@ -27,7 +27,7 @@ final class HealthInsight {
         responseTokens: Int? = nil,
         createdAt: Date = Date()
     ) {
-        self.date = Calendar.current.startOfDay(for: date)
+        self.date = DateHelpers.startOfDay(for: date)
         self.overallScore = overallScore
         self.suggestionsJSON = suggestionsJSON
         self.promptTokens = promptTokens

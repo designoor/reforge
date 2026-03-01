@@ -169,9 +169,9 @@ final class DailySummary {
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
-        let normalized = Calendar.current.startOfDay(for: date)
+        let normalized = DateHelpers.startOfDay(for: date)
         self.date = normalized
-        self.dayOfWeek = Calendar.current.component(.weekday, from: normalized)
+        self.dayOfWeek = DateHelpers.dayOfWeek(for: normalized)
         self.steps = steps
         self.distanceWalkingRunning = distanceWalkingRunning
         self.distanceCycling = distanceCycling
