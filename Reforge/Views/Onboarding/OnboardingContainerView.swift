@@ -95,7 +95,7 @@ struct OnboardingContainerView: View {
         case .schedule:
             ScheduleView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .healthKitPermission:
-            OnboardingStepPlaceholder(step: .healthKitPermission, canAdvance: $canAdvance)
+            HealthKitPermissionView(canAdvance: $canAdvance)
         case .apiKey:
             OnboardingStepPlaceholder(step: .apiKey, canAdvance: $canAdvance)
         case .notificationPermission:
@@ -131,11 +131,13 @@ struct OnboardingContainerView: View {
 
             Spacer()
 
-            Button(step.nextButtonTitle) {
-                goForward()
+            if step != .healthKitPermission || canAdvance {
+                Button(step.nextButtonTitle) {
+                    goForward()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canAdvance)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canAdvance)
         }
     }
 
