@@ -9,6 +9,7 @@ struct ReforgeApp: App {
         let schema = Schema([
             Item.self,
             UserProfile.self,
+            DailySummary.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
