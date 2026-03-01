@@ -101,7 +101,7 @@ struct OnboardingContainerView: View {
         case .notificationPermission:
             NotificationPermissionView(canAdvance: $canAdvance)
         case .backfillProgress:
-            OnboardingStepPlaceholder(step: .backfillProgress, canAdvance: $canAdvance)
+            BackfillProgressView(canAdvance: $canAdvance)
         }
     }
 
@@ -173,71 +173,6 @@ struct OnboardingContainerView: View {
                 insertion: .move(edge: .leading),
                 removal: .move(edge: .trailing)
             )
-        }
-    }
-}
-
-// MARK: - Placeholder (replaced by Steps 5.2–5.8)
-
-struct OnboardingStepPlaceholder: View {
-    @Environment(AppState.self) private var appState
-
-    let step: OnboardingStep
-    @Binding var canAdvance: Bool
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: iconName)
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-
-            Text(step.title)
-                .font(.largeTitle.bold())
-
-            Text("Screen \(step.rawValue + 1) of 7")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-
-            Text(description)
-                .font(.body)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            if step == .backfillProgress {
-                Button("Complete Onboarding") {
-                    appState.isOnboardingComplete = true
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, 16)
-            }
-        }
-        .onAppear {
-            canAdvance = true
-        }
-    }
-
-    private var iconName: String {
-        switch step {
-        case .welcome: "hand.wave"
-        case .personalInfo: "person.fill"
-        case .schedule: "clock"
-        case .healthKitPermission: "heart.fill"
-        case .apiKey: "key.fill"
-        case .notificationPermission: "bell.fill"
-        case .backfillProgress: "arrow.down.circle"
-        }
-    }
-
-    private var description: String {
-        switch step {
-        case .welcome: "Welcome screen with value proposition"
-        case .personalInfo: "DOB, sex, units, height, weight"
-        case .schedule: "Timezone and wake time"
-        case .healthKitPermission: "Grant HealthKit access"
-        case .apiKey: "Enter Anthropic API key"
-        case .notificationPermission: "Enable notifications"
-        case .backfillProgress: "Import historical health data"
         }
     }
 }
