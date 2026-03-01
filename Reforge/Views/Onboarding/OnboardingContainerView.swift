@@ -97,7 +97,7 @@ struct OnboardingContainerView: View {
         case .healthKitPermission:
             HealthKitPermissionView(canAdvance: $canAdvance)
         case .apiKey:
-            OnboardingStepPlaceholder(step: .apiKey, canAdvance: $canAdvance)
+            APIKeyView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .notificationPermission:
             OnboardingStepPlaceholder(step: .notificationPermission, canAdvance: $canAdvance)
         case .backfillProgress:
@@ -131,7 +131,7 @@ struct OnboardingContainerView: View {
 
             Spacer()
 
-            if step != .healthKitPermission || canAdvance {
+            if (step != .healthKitPermission && step != .apiKey) || canAdvance {
                 Button(step.nextButtonTitle) {
                     goForward()
                 }
