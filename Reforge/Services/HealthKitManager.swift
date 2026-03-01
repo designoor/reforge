@@ -13,4 +13,14 @@ enum HealthKitManager {
         )
         try await healthStore.requestAuthorization(toShare: [], read: readTypes)
     }
+
+    static func getDateOfBirth() throws -> Date? {
+        let components = try healthStore.dateOfBirthComponents()
+        return Calendar.current.date(from: components)
+    }
+
+    static func getBiologicalSex() throws -> HKBiologicalSex? {
+        let biologicalSex = try healthStore.biologicalSex().biologicalSex
+        return biologicalSex == .notSet ? nil : biologicalSex
+    }
 }
