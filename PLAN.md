@@ -279,7 +279,7 @@ HealthCoach/
 
 ### Phase 2: Data Models
 
-#### Step 2.1 — MetricDefinition Enum
+#### Step 2.1 — MetricDefinition Enum ✅
 
 Define `MetricDefinition` enum with a case for each of the 49 tracked metrics. Each case provides:
 
@@ -292,7 +292,7 @@ Define `MetricDefinition` enum with a case for each of the 49 tracked metrics. E
 
 **Verify**: All 49 metrics are represented. Can iterate `MetricDefinition.allCases` and get correct identifiers and units for each.
 
-#### Step 2.2 — UserProfile Model
+#### Step 2.2 — UserProfile Model ✅
 
 SwiftData `@Model` class with properties:
 
