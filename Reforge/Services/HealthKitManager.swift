@@ -1,6 +1,11 @@
 import HealthKit
 
 enum HealthKitManager {
+    typealias SleepBreakdown = (
+        total: Double, inBed: Double, awake: Double,
+        core: Double, deep: Double, rem: Double
+    )
+
     private static let healthStore = HKHealthStore()
 
     static func isAvailable() -> Bool {
@@ -165,5 +170,126 @@ enum HealthKitManager {
             }
             healthStore.execute(query)
         }
+    }
+
+    // MARK: - Category Queries
+
+    private static func fetchCategorySamples(
+        for identifier: HKCategoryTypeIdentifier,
+        start: Date,
+        end: Date
+    ) async throws -> [HKCategorySample] {
+        let categoryType = HKCategoryType(identifier)
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictStartDate
+        )
+        let sortDescriptor = NSSortDescriptor(
+            key: HKSampleSortIdentifierStartDate,
+            ascending: true
+        )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: categoryType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let categorySamples = (samples as? [HKCategorySample]) ?? []
+                continuation.resume(returning: categorySamples)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    private static func mergeIntervals(
+        _ intervals: [(start: Date, end: Date)]
+    ) -> [(start: Date, end: Date)] {
+        guard var current = intervals.first else { return [] }
+        var merged: [(start: Date, end: Date)] = []
+
+        for interval in intervals.dropFirst() {
+            if interval.start <= current.end {
+                current.end = max(current.end, interval.end)
+            } else {
+                merged.append(current)
+                current = interval
+            }
+        }
+        merged.append(current)
+        return merged
+    }
+
+    static func querySleepAnalysis(
+        start: Date,
+        end: Date
+    ) async throws -> SleepBreakdown? {
+        let samples = try await fetchCategorySamples(
+            for: .sleepAnalysis, start: start, end: end
+        )
+        guard !samples.isEmpty else { return nil }
+
+        var grouped: [Int: [(start: Date, end: Date)]] = [:]
+        for sample in samples {
+            grouped[sample.value, default: []].append(
+                (start: sample.startDate, end: sample.endDate)
+            )
+        }
+
+        func hours(for value: HKCategoryValueSleepAnalysis) -> Double {
+            guard let intervals = grouped[value.rawValue] else { return 0 }
+            let merged = mergeIntervals(intervals)
+            let seconds = merged.reduce(0.0) {
+                $0 + $1.end.timeIntervalSince($1.start)
+            }
+            return seconds / 3600
+        }
+
+        let inBed = hours(for: .inBed)
+        let awake = hours(for: .awake)
+        let core = hours(for: .asleepCore)
+        let deep = hours(for: .asleepDeep)
+        let rem = hours(for: .asleepREM)
+        let unspecified = hours(for: .asleepUnspecified)
+        let total = core + deep + rem + unspecified
+
+        return (total: total, inBed: inBed, awake: awake,
+                core: core, deep: deep, rem: rem)
+    }
+
+    static func queryCategoryCount(
+        for identifier: HKCategoryTypeIdentifier,
+        start: Date,
+        end: Date
+    ) async throws -> Int {
+        let samples = try await fetchCategorySamples(
+            for: identifier, start: start, end: end
+        )
+        if identifier == .appleStandHour {
+            return samples.filter {
+                $0.value == HKCategoryValueAppleStandHour.stood.rawValue
+            }.count
+        }
+        return samples.count
+    }
+
+    static func queryMindfulMinutes(
+        start: Date,
+        end: Date
+    ) async throws -> Double? {
+        let samples = try await fetchCategorySamples(
+            for: .mindfulSession, start: start, end: end
+        )
+        guard !samples.isEmpty else { return nil }
+        let seconds = samples.reduce(0.0) {
+            $0 + $1.endDate.timeIntervalSince($1.startDate)
+        }
+        return seconds / 60
     }
 }
