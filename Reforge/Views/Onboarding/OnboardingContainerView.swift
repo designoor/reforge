@@ -93,7 +93,7 @@ struct OnboardingContainerView: View {
         case .personalInfo:
             PersonalInfoView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .schedule:
-            OnboardingStepPlaceholder(step: .schedule, canAdvance: $canAdvance)
+            ScheduleView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .healthKitPermission:
             OnboardingStepPlaceholder(step: .healthKitPermission, canAdvance: $canAdvance)
         case .apiKey:
