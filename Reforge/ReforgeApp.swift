@@ -1,3 +1,10 @@
+//
+//  ReforgeApp.swift
+//  Reforge
+//
+//  Created by ryowa on 01.03.2026.
+//
+
 import SwiftUI
 import SwiftData
 
@@ -5,17 +12,7 @@ import SwiftData
 struct ReforgeApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            UserProfile.self,
-            Plan.self,
-            WorkoutDay.self,
-            Exercise.self,
-            MealPlan.self,
-            Meal.self,
-            WorkoutSession.self,
-            SetLog.self,
-            WeightEntry.self,
-            MeasurementEntry.self,
-            StreakRecord.self,
+            Item.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 

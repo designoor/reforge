@@ -1,994 +1,1207 @@
-# REFORGE — Implementation Plan
+# HealthCoach — Implementation Plan
 
-> AI-Powered Body Recomposition iOS App
-> Native Swift/SwiftUI · Claude API · SceneKit 3D Models
-> Refer to `reforge-concept.docx` for full product context.
+## What We're Building
+
+HealthCoach is an iOS app that acts as a personal AI health coach. It reads the user's health and fitness data from Apple HealthKit, aggregates it into meaningful daily summaries, and sends those summaries to the Anthropic Claude API for personalized analysis and actionable health suggestions.
+
+The app collects 49 HealthKit metrics across activity, heart, respiratory, body, mobility, sleep, and workout categories. Each day it queries HealthKit for the previous day's data, aggregates it into a `DailySummary`, stores it locally in SwiftData, and computes trend comparisons (day-of-week medians, weekly totals, monthly totals) from the historical store.
+
+## Why
+
+Health data is abundant but overwhelming. Apple Watch and iPhone collect dozens of metrics daily — steps, heart rate, sleep stages, HRV, VO2 max, and more — but most people never look at it beyond glancing at their rings. HealthCoach bridges the gap between raw data and actionable insight by using Claude to interpret patterns, spot anomalies, and provide personalized recommendations grounded in the user's actual data and trends.
+
+## How It Works
+
+### Daily Flow
+
+1. **Trigger**: Every day at 00:01 (via `BGProcessingTask`), or when the user opens the app (whichever comes first), the app checks if yesterday's data has been processed.
+2. **Query**: The app queries HealthKit for yesterday's data only (00:00–23:59).
+3. **Aggregate**: Raw samples are aggregated into a single `DailySummary` — sums for cumulative metrics (steps, energy), averages for rate-based metrics (HR, HRV), min/max where clinically meaningful.
+4. **Store**: The `DailySummary` is persisted in SwiftData. Data is stored indefinitely.
+5. **Compute Trends**: From the local store, the app computes:
+   - Day-of-week median (median of all stored Tuesdays, Wednesdays, etc.)
+   - This week total/avg, last week total/avg, week median (past year)
+   - This month total/avg, last month total/avg, month median (past year)
+6. **Build Prompt**: Yesterday's data + trends + user profile (age, sex, weight) are formatted into a compact, structured prompt.
+7. **Call Claude**: The prompt is sent to the Anthropic API (direct from device, API key stored in Keychain).
+8. **Parse & Store**: Claude's JSON response is parsed into `HealthInsight` objects and stored in SwiftData.
+9. **Notify**: A local notification is posted: "Your daily health insights are ready."
+
+### First Launch
+
+On first launch, the app performs a one-time backfill by querying HealthKit for all available historical data. This bootstraps the trend calculations (medians, averages) so Claude has context from day one.
+
+### Architecture
+
+```
+┌─────────────┐     ┌──────────────────────────────────┐     ┌─────────────────┐
+│  HealthKit   │────▶│           iOS App                 │────▶│  Anthropic API  │
+│  (on device) │     │                                    │     │  (Claude)       │
+└─────────────┘     │  ┌────────────┐ ┌───────────────┐ │     └─────────────────┘
+                     │  │ SwiftData  │ │   Keychain    │ │
+                     │  │ (history)  │ │ (API key)     │ │
+                     │  └────────────┘ └───────────────┘ │
+                     └──────────────────────────────────┘
+```
+
+### API Key Strategy
+
+For v1, the user provides their own Anthropic API key during onboarding. It is stored in the iOS Keychain. In a future version, we will move to a lightweight backend proxy so the key never lives on the device.
+
+### Estimated Cost Per User
+
+Using Claude Sonnet with ~1,000–1,500 tokens input and ~800 tokens output per daily call: approximately $0.01–0.03/day.
 
 ---
 
-## Architecture Overview
+## Tracked HealthKit Metrics (49 items)
+
+### Quantity Types — Activity & Fitness (14)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 1 | `stepCount` | count | sum |
+| 2 | `distanceWalkingRunning` | m | sum |
+| 3 | `distanceCycling` | m | sum |
+| 4 | `distanceSwimming` | m | sum |
+| 7 | `basalEnergyBurned` | kcal | sum |
+| 8 | `activeEnergyBurned` | kcal | sum |
+| 9 | `flightsClimbed` | count | sum |
+| 10 | `appleExerciseTime` | min | sum |
+| 11 | `appleMoveTime` | min | sum |
+| 12 | `appleStandTime` | min | sum |
+| 14 | `swimmingStrokeCount` | count | sum |
+| 16 | `physicalEffort` | kcal/(kg·hr) | avg |
+| 17 | `vo2Max` | mL/(kg·min) | avg |
+
+### Quantity Types — Running Metrics (5)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 18 | `runningSpeed` | m/s | avg |
+| 19 | `runningPower` | W | avg |
+| 20 | `runningStrideLength` | m | avg |
+| 21 | `runningVerticalOscillation` | cm | avg |
+| 22 | `runningGroundContactTime` | ms | avg |
+
+### Quantity Types — Cycling Metrics (4)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 23 | `cyclingSpeed` | m/s | avg |
+| 24 | `cyclingPower` | W | avg |
+| 25 | `cyclingFunctionalThresholdPower` | W | avg |
+| 26 | `cyclingCadence` | count/min | avg |
+
+### Quantity Types — Heart (7)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 32 | `heartRate` | bpm | avg, min, max |
+| 33 | `restingHeartRate` | bpm | avg |
+| 34 | `walkingHeartRateAverage` | bpm | avg |
+| 35 | `heartRateVariabilitySDNN` | ms | avg |
+| 36 | `heartRateRecoveryOneMinute` | bpm | avg |
+| 37 | `atrialFibrillationBurden` | % | avg |
+| 38 | `peripheralPerfusionIndex` | % | avg |
+
+### Quantity Types — Respiratory (2)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 39 | `respiratoryRate` | breaths/min | avg, min, max |
+| 40 | `oxygenSaturation` | % | avg, min |
+
+### Quantity Types — Body Measurements (4)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 45 | `height` | m | most recent |
+| 46 | `bodyMass` | kg | most recent |
+| 47 | `bodyMassIndex` | count | most recent |
+| 53 | `appleSleepingWristTemperature` | °C | avg, min, max |
+
+### Quantity Types — Mobility (7)
+
+| # | Identifier | Unit | Aggregation |
+|---|---|---|---|
+| 94 | `walkingSpeed` | m/s | avg |
+| 95 | `walkingStepLength` | m | avg |
+| 96 | `walkingAsymmetryPercentage` | % | avg |
+| 97 | `walkingDoubleSupportPercentage` | % | avg |
+| 98 | `stairAscentSpeed` | m/s | avg |
+| 99 | `stairDescentSpeed` | m/s | avg |
+| 100 | `sixMinuteWalkTestDistance` | m | most recent |
+
+### Category Types (6)
+
+| # | Identifier | Aggregation |
+|---|---|---|
+| 110 | `sleepAnalysis` | total hours + breakdown: inBed, awake, core, deep, REM |
+| 111 | `appleStandHour` | count of "stood" hours in the day |
+| 112 | `mindfulSession` | total minutes |
+| 113 | `highHeartRateEvent` | count of events |
+| 114 | `lowHeartRateEvent` | count of events |
+| 115 | `irregularHeartRhythmEvent` | count of events |
+
+### Workouts (1)
+
+| # | Identifier | Aggregation |
+|---|---|---|
+| 164 | HKWorkout | count, total duration (min), total energy (kcal), breakdown by workout type |
+
+---
+
+## Data Storage Strategy
+
+### Why Store Locally
+
+- HealthKit queries across 365 days of raw samples are expensive, especially for high-frequency types like heart rate (thousands of samples/day).
+- HealthKit data can be deleted by the user at any time — local storage preserves aggregated history.
+- Computing medians across 365 stored daily rows is trivial (sorting ~365 numbers).
+- The nightly job becomes: "query HealthKit for yesterday only → store one new row → recompute aggregates from local store."
+
+### What Gets Stored
+
+Each day produces one `DailySummary` row containing all 49 metrics' aggregated values. This row is stored forever in SwiftData (with CloudKit sync for device migration in a future version).
+
+### Trend Computations (from local store)
+
+For each metric, the app computes on-demand from stored `DailySummary` rows:
+
+- **Day-of-week median**: Median of all stored values for the same weekday (e.g., all Fridays).
+- **This week**: Sum or avg of last 7 days.
+- **Last week**: Sum or avg of days 8–14 ago.
+- **Week median**: Median of all stored weekly totals/avgs (up to past year).
+- **This month**: Sum or avg of current calendar month so far.
+- **Last month**: Sum or avg of previous calendar month.
+- **Month median**: Median of all stored monthly totals/avgs (up to past year).
+
+---
+
+## Onboarding Flow
 
 ```
-ReforgeApp/
+Screen 1: Welcome → value prop
+Screen 2: Personal info → DOB, biological sex, weight, height, unit preference
+Screen 3: Schedule → time zone (auto-detect + override), typical wake time
+Screen 4: HealthKit → pre-permission explanation, then system permission dialog
+Screen 5: API key → text field, stored in Keychain
+Screen 6: Notifications → pre-permission explanation, then system permission dialog
+Screen 7: Backfill → progress screen while importing historical HealthKit data
+```
+
+---
+
+## Project Structure
+
+```
+HealthCoach/
 ├── App/
-│   ├── ReforgeApp.swift              # @main entry, WindowGroup, SwiftData container setup
-│   └── ContentView.swift             # Root view — routes between Onboarding and MainTabView
+│   ├── HealthCoachApp.swift                 // Entry point, SwiftData container, tab routing
+│   └── AppState.swift                       // Global app state (onboarding complete, etc.)
 ├── Models/
-│   ├── UserProfile.swift
-│   ├── Plan.swift
-│   ├── WorkoutDay.swift
-│   ├── Exercise.swift
-│   ├── MealPlan.swift
-│   ├── Meal.swift
-│   ├── WorkoutSession.swift
-│   ├── SetLog.swift
-│   ├── WeightEntry.swift
-│   ├── MeasurementEntry.swift
-│   └── StreakRecord.swift
-├── ViewModels/
-│   ├── OnboardingViewModel.swift
-│   ├── DashboardViewModel.swift
-│   ├── WorkoutSessionViewModel.swift
-│   ├── MealPlanViewModel.swift
-│   ├── ProgressViewModel.swift
-│   └── AdaptationViewModel.swift
+│   ├── UserProfile.swift                    // DOB, sex, height, weight, units, wake time, timezone
+│   ├── DailySummary.swift                   // One row per day, all 49 metrics aggregated
+│   ├── WorkoutSummary.swift                 // Individual workout records for the day
+│   ├── HealthInsight.swift                  // Claude's parsed response for a given day
+│   └── MetricDefinition.swift              // Enum of all 49 metrics with units, aggregation type
+├── Services/
+│   ├── HealthKitManager.swift               // Auth + raw queries
+│   ├── HealthDataAggregator.swift           // Raw HK samples → DailySummary
+│   ├── TrendCalculator.swift                // DailySummary history → trend values
+│   ├── DailyDataService.swift               // Orchestrates daily data collection
+│   ├── KeychainService.swift                // API key storage/retrieval
+│   ├── ClaudeService.swift                  // Anthropic API calls (future phase)
+│   ├── PromptBuilder.swift                  // Aggregated data → Claude prompt (future phase)
+│   ├── BackgroundTaskManager.swift          // BGProcessingTask scheduling + execution
+│   └── NotificationManager.swift            // Local notification permissions + posting
 ├── Views/
 │   ├── Onboarding/
+│   │   ├── OnboardingContainerView.swift    // Manages onboarding page flow
+│   │   ├── WelcomeView.swift                // Screen 1
+│   │   ├── PersonalInfoView.swift           // Screen 2
+│   │   ├── ScheduleView.swift               // Screen 3
+│   │   ├── HealthKitPermissionView.swift    // Screen 4
+│   │   ├── APIKeyView.swift                 // Screen 5
+│   │   ├── NotificationPermissionView.swift // Screen 6
+│   │   └── BackfillProgressView.swift       // Screen 7
 │   ├── Dashboard/
-│   ├── Workout/
-│   ├── Nutrition/
-│   ├── Progress/
-│   ├── Settings/
-│   └── Components/
-├── Services/
-│   ├── ClaudeAPIService.swift
-│   ├── NotificationService.swift
-│   ├── StreakService.swift
-│   └── AdaptationEngine.swift
-├── ThreeDee/
-│   ├── ExerciseModelView.swift
-│   ├── ModelCatalog.swift
-│   └── Models/                       # .usdz files
-├── Resources/
-│   ├── Assets.xcassets
-│   └── Fonts/
+│   │   └── DashboardView.swift              // Daily view with date navigation
+│   ├── Profile/
+│   │   ├── ProfileView.swift                // Main settings screen
+│   │   └── EditSheets/                      // Modal editors for each setting
+│   │       ├── DOBEditSheet.swift
+│   │       ├── SexEditSheet.swift
+│   │       ├── HeightEditSheet.swift
+│   │       ├── WeightEditSheet.swift
+│   │       ├── TimezoneEditSheet.swift
+│   │       ├── WakeTimeEditSheet.swift
+│   │       └── APIKeyEditSheet.swift
+│   └── Debug/
+│       ├── DebugDataView.swift              // Container with tabs/segments
+│       ├── DailySummaryBrowserView.swift     // Browse daily data by date
+│       ├── AggregatedDataView.swift          // Data payload that will be sent to Claude
+│       └── DataStatsView.swift              // Storage statistics + maintenance
 └── Utilities/
-    ├── Extensions/
-    ├── Constants.swift
-    └── JSONSchemas.swift
+    ├── DateHelpers.swift                    // Date range builders, weekday extraction
+    └── UnitConverter.swift                  // Metric ↔ imperial conversions
 ```
 
 ---
 
-## Phase 1 — Foundation (Weeks 1–4)
-
-### Step 1.1: Project Setup & Configuration
-
-**Goal:** Empty Xcode project that builds and runs on simulator.
-
-- [ ] Create new Xcode project: iOS App, SwiftUI, Swift, bundle ID `com.reforge.app`
-- [ ] Set minimum deployment target: iOS 17.0
-- [ ] Set up folder structure matching architecture above
-- [ ] Create `Constants.swift` with:
-  - `enum AppConstants` — static let `claudeAPIBaseURL = "https://api.anthropic.com/v1/messages"`, `claudeModel = "claude-sonnet-4-20250514"`, `maxTokens = 4096`
-  - `enum ExerciseType: String, Codable, CaseIterable` — cases: `upperPush, upperPull, lowerBody, core, cardio, fullBodyHIIT, warmup, cooldown`
-  - `enum GoalType: String, Codable, CaseIterable` — cases: `loseFat, buildMuscle, recomposition`
-  - `enum ActivityLevel: String, Codable, CaseIterable` — cases: `sedentary, lightlyActive, moderatelyActive, active`
-  - `enum DietaryRestriction: String, Codable, CaseIterable` — cases: `none, vegetarian, vegan, glutenFree, dairyFree, lowCarb`
-  - `enum DifficultyLevel: Int, Codable` — cases: `beginner = 1, intermediate = 2, advanced = 3, elite = 4`
-- [ ] Add a placeholder `ContentView` that displays "Reforge" text — confirm it runs on simulator
-
-### Step 1.2: SwiftData Models
-
-**Goal:** All data models defined and persisting locally. Testable via Xcode previews.
-
-**`UserProfile.swift`**
-- `@Model class UserProfile`
-- Properties: `id: UUID`, `name: String`, `heightCm: Double`, `weightKg: Double`, `age: Int`, `biologicalSex: String`, `activityLevel: String` (raw value of ActivityLevel), `goal: String` (raw value of GoalType), `dietaryRestrictions: [String]`, `availableDaysPerWeek: Int`, `sessionLengthMinutes: Int`, `createdAt: Date`, `updatedAt: Date`
-- Relationship: `activePlan: Plan?` (optional, inverse)
-- Computed property: `bmi: Double` — weightKg / (heightCm/100)^2
-
-**`Plan.swift`**
-- `@Model class Plan`
-- Properties: `id: UUID`, `startDate: Date`, `endDate: Date`, `difficulty: Int` (raw value of DifficultyLevel), `weekCount: Int`, `isActive: Bool`, `rawJSON: String` (stores the full Claude response for reference), `createdAt: Date`
-- Relationships: `workoutDays: [WorkoutDay]`, `mealPlan: MealPlan?`, `userProfile: UserProfile?`
-
-**`WorkoutDay.swift`**
-- `@Model class WorkoutDay`
-- Properties: `id: UUID`, `dayOfWeek: Int` (1=Monday, 7=Sunday), `title: String`, `type: String` (raw value of ExerciseType), `orderIndex: Int`, `estimatedMinutes: Int`
-- Relationships: `exercises: [Exercise]`, `plan: Plan?`
-
-**`Exercise.swift`**
-- `@Model class Exercise`
-- Properties: `id: UUID`, `name: String`, `sets: Int`, `targetReps: String` (string to support "30s" or "10 each"), `restSeconds: Int`, `formCues: String`, `modelId: String` (maps to 3D model filename), `orderIndex: Int`, `muscleGroups: [String]`
-- Relationship: `workoutDay: WorkoutDay?`
-
-**`MealPlan.swift`**
-- `@Model class MealPlan`
-- Properties: `id: UUID`, `dailyCalories: Int`, `dailyProteinG: Int`, `dailyCarbsG: Int`, `dailyFatG: Int`
-- Relationships: `meals: [Meal]`, `plan: Plan?`
-
-**`Meal.swift`**
-- `@Model class Meal`
-- Properties: `id: UUID`, `name: String` (e.g. "Breakfast"), `timeSlot: String` (e.g. "7:00 AM"), `orderIndex: Int`, `optionsJSON: String` (JSON array of MealOption structs — see below)
-- Relationship: `mealPlan: MealPlan?`
-- Helper struct (not @Model, just Codable): `MealOption` — `title: String`, `ingredients: [String]`, `calories: Int`, `proteinG: Int`, `carbsG: Int`, `fatG: Int`, `preparationNotes: String`
-
-**`WorkoutSession.swift`**
-- `@Model class WorkoutSession`
-- Properties: `id: UUID`, `date: Date`, `workoutDayId: UUID` (reference to which WorkoutDay), `durationSeconds: Int`, `completed: Bool`, `difficultyRating: Int?` (1–5, optional post-workout), `notes: String?`
-- Relationship: `setLogs: [SetLog]`
-
-**`SetLog.swift`**
-- `@Model class SetLog`
-- Properties: `id: UUID`, `exerciseName: String`, `exerciseId: UUID`, `setNumber: Int`, `targetReps: String`, `actualReps: Int`, `completedAt: Date`
-- Relationship: `workoutSession: WorkoutSession?`
-
-**`WeightEntry.swift`**
-- `@Model class WeightEntry`
-- Properties: `id: UUID`, `date: Date`, `weightKg: Double`, `notes: String?`
-
-**`MeasurementEntry.swift`**
-- `@Model class MeasurementEntry`
-- Properties: `id: UUID`, `date: Date`, `waistCm: Double?`, `chestCm: Double?`, `leftArmCm: Double?`, `rightArmCm: Double?`, `leftThighCm: Double?`, `rightThighCm: Double?`
-
-**`StreakRecord.swift`**
-- `@Model class StreakRecord`
-- Properties: `id: UUID`, `currentStreak: Int`, `longestStreak: Int`, `lastWorkoutDate: Date?`, `freezesAvailable: Int`, `graceUsedThisWeek: Bool`
-
-**Setup in `ReforgeApp.swift`:**
-- Create a `ModelContainer` with all model types
-- Inject into environment via `.modelContainer(container)`
-
-**Test:** Write a SwiftUI preview that creates a sample `UserProfile`, saves it, fetches it, displays the name. Confirm data persists between simulator launches.
+## Implementation Phases
 
 ---
 
-### Step 1.3: Onboarding Flow
+### Phase 1: Project Skeleton
 
-**Goal:** 5-screen onboarding that collects all user data and stores it in SwiftData.
+#### ~~Step 1.1 — Create Xcode Project~~ ✅
 
-**`OnboardingViewModel.swift`**
-- `@Observable class OnboardingViewModel`
-- Published properties (bound to form fields):
-  - `name: String = ""`
-  - `heightCm: Double = 175.0`
-  - `weightKg: Double = 80.0`
-  - `age: Int = 30`
-  - `biologicalSex: String = "male"`
-  - `activityLevel: ActivityLevel = .sedentary`
-  - `goal: GoalType = .recomposition`
-  - `dietaryRestrictions: Set<DietaryRestriction> = [.none]`
-  - `availableDays: Int = 5`
-  - `sessionLength: Int = 30`
-  - `currentStep: Int = 0` (0–4)
-- Computed: `canProceed: Bool` — validates current step's required fields are filled
-- Method: `func saveProfile(context: ModelContext) -> UserProfile` — creates and inserts UserProfile, returns it
-- Method: `func toPromptPayload() -> OnboardingPayload` — packages all data into a Codable struct for the API call
+- Create new Xcode project: iOS App, SwiftUI, Swift, SwiftData.
+- Bundle ID: `com.healthcoach.app`
+- Deployment target: iOS 17.0
+- Enable HealthKit capability in Signing & Capabilities.
+- Enable Background Modes capability (Background fetch, Background processing).
+- Add `NSHealthShareUsageDescription` to Info.plist: "HealthCoach reads your health data to provide personalized AI-powered health insights and recommendations."
+- Add `NSHealthUpdateUsageDescription` to Info.plist: "HealthCoach may store health-related notes back to Apple Health."
 
-**`OnboardingPayload` (Codable struct in `JSONSchemas.swift`):**
-```
-struct OnboardingPayload: Codable {
-    let name: String
-    let heightCm: Double
-    let weightKg: Double
-    let age: Int
-    let biologicalSex: String
-    let activityLevel: String
-    let goal: String
-    let dietaryRestrictions: [String]
-    let availableDaysPerWeek: Int
-    let sessionLengthMinutes: Int
-}
-```
+**Verify**: Project builds and runs on simulator. HealthKit entitlement visible in project settings.
 
-**Screens (in `Views/Onboarding/`):**
+#### Step 1.2 — App Entry Point & State
 
-1. **`WelcomeView.swift`** — App logo, tagline "Your plan evolves with you", subtitle explaining the value prop, "Get Started" button. No data collection.
+- `HealthCoachApp.swift`: Set up SwiftData `ModelContainer` with all model types. Root view checks `AppState` to decide whether to show onboarding or dashboard.
+- `AppState.swift`: Observable class that tracks `isOnboardingComplete` (persisted via `@AppStorage`). Tracks current onboarding step index.
 
-2. **`BodyStatsView.swift`** — Sliders or steppers for: height (140–220 cm), weight (40–200 kg), age (16–80). Segmented picker for biological sex (Male / Female). Show computed BMI live.
-
-3. **`GoalsView.swift`** — Three tappable cards for goal selection (loseFat, buildMuscle, recomposition). Each card has an icon, title, and one-line description. Optional target weight field (number input).
-
-4. **`LifestyleView.swift`** — Activity level picker (4 options as tappable cards). Days per week stepper (3–6). Session length segmented control (20, 30, 45 min). Dietary restrictions multi-select (toggleable chips).
-
-5. **`PlanGenerationView.swift`** — Shows a loading animation with "Building your plan..." text. Triggers `ClaudeAPIService.generatePlan()`. On success, navigates to `MainTabView`. On failure, shows retry button with error message.
-
-**`OnboardingContainerView.swift`:**
-- Wraps all 5 steps in a `TabView` with `.tabViewStyle(.page)` for swipe navigation
-- "Next" / "Back" buttons at bottom
-- Progress dots at top
-- Injects `OnboardingViewModel` as `@State`
-
-**`ContentView.swift` routing logic:**
-- Query SwiftData for existing `UserProfile`
-- If none exists → show `OnboardingContainerView`
-- If profile exists but no active plan → show `PlanGenerationView`
-- If profile + active plan exist → show `MainTabView`
-
-**Test:** Complete the full onboarding flow on simulator. Verify the `UserProfile` persists. Kill and relaunch the app — should skip onboarding and go to main view.
+**Verify**: App launches and shows a placeholder view. `isOnboardingComplete` state persists across launches.
 
 ---
 
-### Step 1.4: Claude API Service
+### Phase 2: Data Models
 
-**Goal:** Working API integration that sends onboarding data and receives a structured plan.
+#### Step 2.1 — MetricDefinition Enum
 
-**`ClaudeAPIService.swift`**
-- `actor ClaudeAPIService` (actor for thread safety)
-- Property: `private let apiKey: String` (loaded from environment or config)
-- Property: `private let session = URLSession.shared`
+Define `MetricDefinition` enum with a case for each of the 49 tracked metrics. Each case provides:
 
-**Method: `func generatePlan(from payload: OnboardingPayload) async throws -> PlanResponse`**
-- Builds the HTTP request:
-  - URL: `AppConstants.claudeAPIBaseURL`
-  - Method: POST
-  - Headers: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`
-  - Body: `{ model, max_tokens, system, messages }`
-- System prompt (stored in `Constants.swift` or a separate `Prompts.swift`):
-  ```
-  You are an expert certified personal trainer and nutritionist.
-  Generate a personalised 4-week bodyweight exercise plan and daily meal plan.
-  Respond with ONLY valid JSON matching the schema below. No markdown, no preamble.
-  [full PlanResponseSchema as JSON Schema]
-  ```
-- User message: `"Generate a plan for this user: \(payload as JSON string)"`
-- Parses response: extracts `content[0].text`, decodes as `PlanResponse`
-- Error handling: throws typed errors — `APIError.invalidResponse`, `.decodingFailed`, `.rateLimited`, `.serverError(statusCode)`
+- `hkIdentifier`: The `HKQuantityTypeIdentifier` or `HKCategoryTypeIdentifier` string.
+- `displayName`: Human-readable name (e.g., "Steps", "Resting Heart Rate").
+- `unit`: The `HKUnit` to query with (e.g., `.count()`, `.kilocalorie()`, `.meterPerSecond()`).
+- `aggregation`: Enum value — `.sum`, `.avg`, `.mostRecent`, `.avgMinMax`, `.avgMin`.
+- `category`: Grouping — `.activity`, `.running`, `.cycling`, `.heart`, `.respiratory`, `.body`, `.mobility`, `.sleep`, `.events`, `.workout`.
+- `isCategory`: Bool — whether this is a `HKCategoryType` vs `HKQuantityType`.
 
-**Method: `func adaptPlan(currentPlan: PlanResponse, performance: PerformanceLog, profile: OnboardingPayload) async throws -> PlanAdaptationResponse`**
-- Similar structure, different prompt (see Phase 3 for full detail)
-- Returns only the diff/changes, not a full plan
+**Verify**: All 49 metrics are represented. Can iterate `MetricDefinition.allCases` and get correct identifiers and units for each.
 
-**Method: `func generateWeeklyRecap(performance: WeeklyPerformanceSummary) async throws -> String`**
-- Returns a 2–3 sentence personalised commentary string
+#### Step 2.2 — UserProfile Model
 
-**Method: `func swapMeal(currentMeal: MealOption, constraints: MealConstraints) async throws -> MealOption`**
-- Returns a single replacement meal option with similar macros
+SwiftData `@Model` class with properties:
 
-**`PlanResponse` (Codable struct in `JSONSchemas.swift`):**
-```
-struct PlanResponse: Codable {
-    let exercisePlan: ExercisePlanData
-    let mealPlan: MealPlanData
-    let metadata: PlanMetadata
-}
+- `dateOfBirth: Date`
+- `biologicalSex: String` (male / female / other)
+- `height: Double` (always stored in meters internally)
+- `weight: Double` (always stored in kg internally)
+- `unitPreference: String` (metric / imperial)
+- `timeZone: String` (timezone identifier, e.g., "Europe/Prague")
+- `wakeTime: Date` (just the time component)
+- `createdAt: Date`
+- `updatedAt: Date`
 
-struct ExercisePlanData: Codable {
-    let days: [WorkoutDayData]
-}
+Internal storage is always metric. Display conversion handled by `UnitConverter`.
 
-struct WorkoutDayData: Codable {
-    let dayOfWeek: Int
-    let title: String
-    let type: String
-    let estimatedMinutes: Int
-    let exercises: [ExerciseData]
-}
+**Verify**: Can create, save, and fetch a `UserProfile` from SwiftData. Persists across app restarts.
 
-struct ExerciseData: Codable {
-    let name: String
-    let sets: Int
-    let targetReps: String
-    let restSeconds: Int
-    let formCues: String
-    let modelId: String
-    let muscleGroups: [String]
-}
+#### Step 2.3 — DailySummary Model
 
-struct MealPlanData: Codable {
-    let dailyCalories: Int
-    let dailyProteinG: Int
-    let dailyCarbsG: Int
-    let dailyFatG: Int
-    let meals: [MealData]
-}
+SwiftData `@Model` class. One row per day. Properties:
 
-struct MealData: Codable {
-    let name: String
-    let timeSlot: String
-    let options: [MealOptionData]
-}
+- `date: Date` (normalized to midnight of the day)
+- `dayOfWeek: Int` (1=Sunday … 7=Saturday, from Calendar)
 
-struct MealOptionData: Codable {
-    let title: String
-    let ingredients: [String]
-    let calories: Int
-    let proteinG: Int
-    let carbsG: Int
-    let fatG: Int
-    let preparationNotes: String
-}
+Activity fields:
+- `steps: Int?`
+- `distanceWalkingRunning: Double?`
+- `distanceCycling: Double?`
+- `distanceSwimming: Double?`
+- `basalEnergyBurned: Double?`
+- `activeEnergyBurned: Double?`
+- `flightsClimbed: Int?`
+- `appleExerciseTime: Double?`
+- `appleMoveTime: Double?`
+- `appleStandTime: Double?`
+- `swimmingStrokeCount: Int?`
+- `physicalEffort: Double?`
+- `vo2Max: Double?`
 
-struct PlanMetadata: Codable {
-    let difficulty: Int
-    let weeklyProgressionNotes: String
-}
-```
+Running fields:
+- `runningSpeed: Double?`
+- `runningPower: Double?`
+- `runningStrideLength: Double?`
+- `runningVerticalOscillation: Double?`
+- `runningGroundContactTime: Double?`
 
-**`PlanMapper.swift` (in `Utilities/`):**
-- `static func mapToPlan(from response: PlanResponse, for profile: UserProfile, context: ModelContext) -> Plan`
-- Creates all SwiftData model objects from the API response
-- Links relationships (Plan → WorkoutDays → Exercises, Plan → MealPlan → Meals)
-- Sets `plan.isActive = true`, deactivates any previous active plan
-- Inserts into `ModelContext`
+Cycling fields:
+- `cyclingSpeed: Double?`
+- `cyclingPower: Double?`
+- `cyclingFTP: Double?`
+- `cyclingCadence: Double?`
 
-**API Key Storage:**
-- For development: store in a `.xcconfig` file excluded from git via `.gitignore`
-- For production: store in Keychain via a small `KeychainService` helper
-- Never hardcode the key in source files
+Heart fields:
+- `heartRateAvg: Double?`
+- `heartRateMin: Double?`
+- `heartRateMax: Double?`
+- `restingHeartRate: Double?`
+- `walkingHeartRateAvg: Double?`
+- `hrv: Double?`
+- `heartRateRecovery: Double?`
+- `atrialFibrillationBurden: Double?`
+- `peripheralPerfusionIndex: Double?`
 
-**Test:** Call `generatePlan()` with sample onboarding data. Print the raw JSON response. Verify it decodes into `PlanResponse`. Verify `PlanMapper` creates correct SwiftData objects. Display the plan title on the dashboard.
+Respiratory fields:
+- `respiratoryRateAvg: Double?`
+- `respiratoryRateMin: Double?`
+- `respiratoryRateMax: Double?`
+- `oxygenSaturationAvg: Double?`
+- `oxygenSaturationMin: Double?`
 
----
+Body fields:
+- `height: Double?`
+- `bodyMass: Double?`
+- `bmi: Double?`
+- `sleepingWristTempAvg: Double?`
+- `sleepingWristTempMin: Double?`
+- `sleepingWristTempMax: Double?`
 
-### Step 1.5: Dashboard (Basic)
+Mobility fields:
+- `walkingSpeed: Double?`
+- `walkingStepLength: Double?`
+- `walkingAsymmetry: Double?`
+- `walkingDoubleSupport: Double?`
+- `stairAscentSpeed: Double?`
+- `stairDescentSpeed: Double?`
+- `sixMinWalkDistance: Double?`
 
-**Goal:** Main tab view with a functional dashboard showing today's workout.
+Sleep fields:
+- `sleepTotalHours: Double?`
+- `sleepInBedHours: Double?`
+- `sleepAwakeHours: Double?`
+- `sleepCoreHours: Double?`
+- `sleepDeepHours: Double?`
+- `sleepREMHours: Double?`
 
-**`MainTabView.swift`**
-- `TabView` with 4 tabs: Dashboard, Nutrition, Progress, Settings
-- Each tab has an icon (SF Symbols: `house.fill`, `fork.knife`, `chart.line.uptrend.xyaxis`, `gearshape.fill`)
-- Uses `@Environment(\.modelContext)` for data access
+Event fields:
+- `standHoursCount: Int?`
+- `mindfulMinutes: Double?`
+- `highHeartRateEvents: Int?`
+- `lowHeartRateEvents: Int?`
+- `irregularRhythmEvents: Int?`
 
-**`DashboardViewModel.swift`**
-- `@Observable class DashboardViewModel`
-- Properties:
-  - `todaysWorkout: WorkoutDay?` — fetched based on current day of week
-  - `streak: StreakRecord?`
-  - `userName: String`
-  - `dayNumber: Int` — days since plan start
-  - `weeklyCompletion: [Bool]` — array of 5 booleans for Mon–Fri completion status
-  - `isLevelUpAvailable: Bool` — from AdaptationEngine (Phase 3, stub as false for now)
-- Method: `func loadDashboard(context: ModelContext)` — queries SwiftData for active plan, today's workout day, streak record
-- Method: `func todayDayOfWeek() -> Int` — returns 1–7 based on Calendar
+Metadata:
+- `createdAt: Date`
+- `updatedAt: Date`
 
-**`DashboardView.swift`**
-- Greeting section: "Good morning, [name]. Day [N]." with streak flame if streak ≥ 1
-- Today's Workout Card: large card with workout title, type icon, exercise count, estimated duration. `NavigationLink` to `WorkoutSessionView`
-- Weekly Progress Dots: 5 circles (filled = completed, outlined = not done, pulsing = today)
-- Streak Banner: conditional, shows if streak ≥ 3 with flame icon and count
-- Level-Up Banner: conditional placeholder (hidden for now, enabled in Phase 3)
+All health fields are optional (`nil` = no data for that day). Unique constraint on `date` to prevent duplicate days.
 
-**Test:** Launch app after completing onboarding. Dashboard shows today's workout correctly based on day of week. Tapping the workout card navigates (even if destination is placeholder).
+**Verify**: Can create a `DailySummary` with partial data (some fields nil). Can save, fetch, and query by date range. No duplicate dates allowed.
 
----
+#### Step 2.4 — WorkoutSummary Model
 
-### Step 1.6: Workout Session (Basic — No 3D)
+SwiftData `@Model` class. Multiple rows per day (one per workout). Properties:
 
-**Goal:** Complete a workout, log reps per set, see a summary. No 3D models yet.
+- `date: Date` (day the workout occurred)
+- `workoutType: String` (e.g., "running", "cycling", "yoga" — from `HKWorkoutActivityType`)
+- `duration: Double` (minutes)
+- `totalEnergyBurned: Double?` (kcal)
+- `totalDistance: Double?` (meters)
+- `startTime: Date`
+- `endTime: Date`
+- `createdAt: Date`
 
-**`WorkoutSessionViewModel.swift`**
-- `@Observable class WorkoutSessionViewModel`
-- Properties:
-  - `workoutDay: WorkoutDay`
-  - `exercises: [Exercise]` — sorted by orderIndex
-  - `currentExerciseIndex: Int = 0`
-  - `currentSetNumber: Int = 1`
-  - `isResting: Bool = false`
-  - `restTimeRemaining: Int = 0`
-  - `sessionStartTime: Date?`
-  - `setLogs: [SetLog] = []`
-  - `isComplete: Bool = false`
-- Computed:
-  - `currentExercise: Exercise?`
-  - `progress: Double` — fraction of total sets completed
-  - `totalSets: Int` — sum of all exercises' set counts
-  - `completedSets: Int`
-- Methods:
-  - `func startSession()` — records sessionStartTime
-  - `func logSet(actualReps: Int, context: ModelContext)` — creates SetLog, advances currentSetNumber or moves to next exercise. If last set of last exercise, triggers `completeSession()`
-  - `func startRestTimer()` — sets isResting=true, counts down restSeconds using a Timer
-  - `func skipRest()` — cancels timer, sets isResting=false
-  - `func completeSession(context: ModelContext)` — creates WorkoutSession record, updates StreakRecord, sets isComplete=true
-  - `func sessionSummary() -> SessionSummary` — total duration, exercises completed, total reps, any personal bests
+Can be queried by date to associate with a `DailySummary`.
 
-**`SessionSummary` struct:**
-- `duration: TimeInterval`, `exercisesCompleted: Int`, `totalReps: Int`, `personalBests: [String]` (e.g. "New best: 18 push-ups")
+**Verify**: Can create multiple workouts for the same day. Can query all workouts for a given date range.
 
-**Screens:**
+#### Step 2.5 — HealthInsight Model (stub)
 
-**`WorkoutSessionView.swift`** — Full-screen workout experience:
-- Top bar: exercise name, "Set X of Y", overall progress bar
-- Center: placeholder for 3D model (Phase 2) — for now, show exercise name in large text + formCues below
-- Rep input: a number stepper or quick-tap buttons (–1, target, +1) to input actual reps
-- "Done" button → logs set → if more sets, starts rest timer. If last set, moves to next exercise
-- Rest timer overlay: countdown circle, "Skip" button
-- "End Workout" button (top right) with confirmation dialog
+SwiftData `@Model` class. One row per day (when Claude responds). Properties:
 
-**`WorkoutSummaryView.swift`** — Shown after session completes:
-- Duration, exercises done, total reps
-- Personal bests highlighted
-- Difficulty rating: 5 tappable icons (1=too easy, 5=brutal)
-- "Done" button → navigates back to dashboard
+- `date: Date` (the day this insight covers)
+- `overallScore: Int?` (1–10)
+- `suggestionsJSON: String` (raw JSON string of suggestions array — parsed on read)
+- `promptTokens: Int?`
+- `responseTokens: Int?`
+- `createdAt: Date`
 
-**Streak Update Logic (in `StreakService.swift`):**
-- `static func updateStreak(context: ModelContext)`
-- Fetch or create `StreakRecord`
-- If `lastWorkoutDate` is today → no change (already worked out today)
-- If `lastWorkoutDate` is yesterday or today → increment currentStreak
-- If `lastWorkoutDate` is 2 days ago and `graceUsedThisWeek == false` → mark grace used, keep streak
-- Else → reset currentStreak to 1
-- Update `longestStreak` if currentStreak exceeds it
-- Set `lastWorkoutDate` to today
-- Reset `graceUsedThisWeek` on Mondays
+This is a stub for now — will be fully implemented when Claude integration is built.
 
-**Test:** Start a workout session. Log reps for every set of every exercise. Rest timer counts down between sets. Summary screen shows correct totals. Streak increments. Repeat next day — streak is 2. Skip a day — grace day applies. Skip two days — streak resets.
+**Verify**: Model compiles and can be included in the SwiftData container.
 
 ---
 
-## Phase 2 — 3D Models & Nutrition (Weeks 5–8)
+### Phase 3: Utility Services
 
-### Step 2.1: 3D Model System
+#### Step 3.1 — DateHelpers
 
-**Goal:** SceneKit renders animated USDZ models in the workout session screen.
+`DateHelpers.swift` — static utility functions:
 
-**`ModelCatalog.swift`**
-- `enum ModelCatalog` with static properties
-- `static let models: [String: ModelInfo]` — dictionary mapping `modelId` to model metadata
-- `ModelInfo` struct: `filename: String`, `displayName: String`, `muscleGroups: [String]`, `animationDuration: Double`
-- `static func url(for modelId: String) -> URL?` — returns Bundle URL for the .usdz file
-- Start with 5 placeholder models (basic geometric shapes animating) to prove the pipeline, then replace with real models
+- `startOfDay(for date: Date) -> Date` — normalize to midnight.
+- `dateRange(for date: Date) -> (start: Date, end: Date)` — midnight to 23:59:59.
+- `dayOfWeek(for date: Date) -> Int` — 1=Sunday to 7=Saturday.
+- `yesterday() -> Date` — yesterday's midnight.
+- `daysAgo(_ n: Int, from date: Date) -> Date`
+- `startOfWeek(for date: Date) -> Date`
+- `startOfMonth(for date: Date) -> Date`
+- `dateRangeForWeek(containing date: Date) -> (start: Date, end: Date)`
+- `dateRangeForMonth(containing date: Date) -> (start: Date, end: Date)`
 
-**`ExerciseModelView.swift`** — SwiftUI wrapper for SceneKit:
-- `struct ExerciseModelView: UIViewRepresentable`
-- Creates `SCNView` with `SCNScene` loaded from .usdz file
-- Properties: `modelId: String`, `isPlaying: Bool`, `allowsRotation: Bool = true`
-- Configuration:
-  - `scnView.allowsCameraControl = true` (enables touch rotation/zoom)
-  - `scnView.autoenablesDefaultLighting = true`
-  - `scnView.backgroundColor = UIColor(named: "ModelBackground")` — dark
-  - Set camera to a good default angle
-- Animation control: `scnView.scene?.rootNode.animationPlayer(forKey:)` — play/pause based on `isPlaying`
-- Muscle highlight: find child nodes by name matching muscleGroup, apply emissive material with accent colour
+**Verify**: Unit-testable. Correct at edge cases: start of year, daylight saving transitions, different calendar locales.
 
-**Integration in `WorkoutSessionView.swift`:**
-- Replace the placeholder text with `ExerciseModelView(modelId: currentExercise.modelId, isPlaying: !isResting)`
-- Model pauses during rest, resumes during active set
-- Size: roughly 60% of screen height
+#### Step 3.2 — UnitConverter
 
-**3D Model Production (External to Xcode — Blender workflow documented separately):**
-- Base humanoid mesh with armature (skeleton) rig
-- One .blend file per exercise animation
-- Export as .usdz via Blender or Apple's Reality Converter
-- File naming convention: `exercise_pushup_standard.usdz`, `exercise_squat_bodyweight.usdz`, etc.
-- Place all .usdz files in `ThreeDee/Models/` and add to Xcode target
+`UnitConverter.swift` — static utility for metric ↔ imperial:
 
-**Test:** Workout session shows an animated 3D model for each exercise. Model rotates on touch. Animation loops during active set, pauses during rest.
+- `displayWeight(_ kg: Double, unit: UnitPreference) -> String` — "70.0 kg" or "154.3 lbs"
+- `displayHeight(_ m: Double, unit: UnitPreference) -> String` — "1.75 m" or "5'9\""
+- `displayDistance(_ m: Double, unit: UnitPreference) -> String` — "5.2 km" or "3.2 mi"
+- `displayTemperature(_ celsius: Double, unit: UnitPreference) -> String` — "36.5°C" or "97.7°F"
+- `kgFromLbs(_ lbs: Double) -> Double`
+- `metersFromFeetInches(feet: Int, inches: Int) -> Double`
+- Input conversion helpers for the onboarding form (user enters in their preferred unit, we convert to metric for storage).
 
----
+**Verify**: Conversion accuracy. Round-trip conversions (kg → lbs → kg) return original value within floating-point tolerance.
 
-### Step 2.2: Meal Plan Screen
+#### Step 3.3 — KeychainService
 
-**Goal:** Full meal plan UI with daily view, quick-log, and nutrition tracking.
+`KeychainService.swift` — wrapper around Security framework:
 
-**`MealPlanViewModel.swift`**
-- `@Observable class MealPlanViewModel`
-- Properties:
-  - `meals: [Meal]` — today's meals sorted by orderIndex
-  - `loggedMeals: Set<UUID>` — IDs of meals marked as eaten today
-  - `dailyCaloriesConsumed: Int`
-  - `dailyProteinConsumed: Int`
-  - `dailyCarbsConsumed: Int`
-  - `dailyFatConsumed: Int`
-  - `dailyTargets: (cal: Int, protein: Int, carbs: Int, fat: Int)`
-- Methods:
-  - `func loadMeals(context: ModelContext)` — fetches active plan's meal plan
-  - `func logMeal(meal: Meal, optionIndex: Int, context: ModelContext)` — adds macros from the selected option to daily totals, adds to loggedMeals set, persists a `MealLogEntry` (simple model: date, mealId, optionIndex, macros)
-  - `func unlogMeal(meal: Meal, context: ModelContext)` — reverses a log
-  - `func requestSwap(meal: Meal, optionIndex: Int) async throws -> MealOptionData` — calls `ClaudeAPIService.swapMeal()`
+- `saveAPIKey(_ key: String) throws`
+- `getAPIKey() throws -> String?`
+- `deleteAPIKey() throws`
+- Uses `kSecClassGenericPassword` with a fixed service identifier.
+- Handles error cases: duplicate items, item not found.
 
-**Additional Model: `MealLogEntry.swift`**
-- `@Model class MealLogEntry`
-- Properties: `id: UUID`, `date: Date`, `mealId: UUID`, `optionIndex: Int`, `calories: Int`, `proteinG: Int`, `carbsG: Int`, `fatG: Int`
-
-**Screens:**
-
-**`MealPlanView.swift`** — Daily meal list:
-- Date header with left/right arrows to browse days
-- Vertical scroll of `MealCard` views
-- Bottom summary bar: consumed / target for calories and protein
-
-**`MealCard.swift`** — Individual meal:
-- Collapsed: meal name, time, calorie range, checkmark if logged
-- Expanded (tap to toggle): list of 2–3 options, each showing title, ingredients, macros
-- "Log this" button on each option
-- "Swap" button on each option → loading state → shows new option from Claude
-
-**`ShoppingListView.swift`** — Accessible from a toolbar button:
-- Aggregates all ingredients from the active meal plan
-- Groups by category (protein, carbs, vegetables, etc.)
-- Checkable items for shopping
-
-**`NutritionRingView.swift`** — Reusable circular progress component:
-- Parameters: `consumed: Int`, `target: Int`, `color: Color`, `label: String`
-- Draws an arc from 0 to consumed/target ratio
-- Displays number in center
-- Used on Dashboard and MealPlanView
-
-**Test:** Meal plan shows all meals for the day. Tap to expand shows options with macros. Log a meal — nutrition ring updates. Dashboard ring reflects logged meals. Swap a meal — Claude returns a new option.
+**Verify**: Can save a key, retrieve it, delete it. Persists across app restarts. Cannot be read from outside the app sandbox.
 
 ---
 
-### Step 2.3: Weight & Measurement Logging
+### Phase 4: HealthKit Service
 
-**Goal:** Users can log weight and body measurements. Data persists and is queryable for charts.
+#### Step 4.1 — HealthKitManager: Availability & Authorization
 
-**`WeightLogView.swift`**
-- Prompted weekly (configurable day) via notification
-- Input: weight (decimal stepper or number field), optional notes
-- Shows last 5 entries in a mini list below the input
-- Save button creates `WeightEntry` in SwiftData
+`HealthKitManager.swift` — singleton or environment object.
 
-**`MeasurementLogView.swift`**
-- Prompted biweekly
-- Inputs: waist, chest, left arm, right arm, left thigh, right thigh (all optional, in cm)
-- Visual body diagram with tappable measurement points (nice to have)
-- Save button creates `MeasurementEntry`
+- `isAvailable() -> Bool` — wraps `HKHealthStore.isHealthDataAvailable()`.
+- Define `allReadTypes: Set<HKObjectType>` — the full set of 49 metric types to request read access for:
+  - All 43 `HKQuantityType` identifiers.
+  - `HKCategoryType` for: `sleepAnalysis`, `appleStandHour`, `mindfulSession`, `highHeartRateEvent`, `lowHeartRateEvent`, `irregularHeartRhythmEvent`.
+  - `HKWorkoutType.workoutType()`.
+- `requestAuthorization() async throws` — calls `healthStore.requestAuthorization(toShare: nil, read: allReadTypes)`.
+- Note: HealthKit does not reveal if the user denied specific types — queries just return empty. The app must gracefully handle nil/empty data for any metric.
 
-**Integration:**
-- Add a "Log Weight" quick action button on the Dashboard
-- Add measurement logging in Progress tab
+**Verify**: Calling `requestAuthorization()` triggers the HealthKit permission sheet on a real device. All 49 types + workout type are listed.
 
-**Test:** Log 5 weight entries across different dates. Log 2 measurement entries. Verify all data persists and can be fetched sorted by date.
+#### Step 4.2 — HealthKitManager: Characteristic Queries
 
----
+- `getDateOfBirth() throws -> Date?` — reads `healthStore.dateOfBirthComponents()`.
+- `getBiologicalSex() throws -> HKBiologicalSex?` — reads `healthStore.biologicalSex()`.
+- Used during onboarding as pre-fill suggestions (if the user has set them in the Health app). The user can override.
 
-### Step 2.4: Progress Charts
-
-**Goal:** Swift Charts visualisations for weight trend, workout consistency, and strength.
-
-**`ProgressViewModel.swift`**
-- `@Observable class ProgressViewModel`
-- Properties:
-  - `weightEntries: [WeightEntry]`
-  - `measurementEntries: [MeasurementEntry]`
-  - `workoutSessions: [WorkoutSession]`
-  - `selectedTimeRange: TimeRange = .month` (enum: `.week, .month, .threeMonths, .all`)
-- Methods:
-  - `func loadAll(context: ModelContext)`
-  - `func weightTrendData() -> [(date: Date, weight: Double, movingAvg: Double)]` — raw values + 7-day moving average
-  - `func workoutConsistencyData() -> [(date: Date, completed: Bool)]` — for heatmap
-  - `func strengthProgressionData(exerciseName: String) -> [(date: Date, totalReps: Int)]` — sum of actualReps per session for a given exercise
-  - `func weeklyVolume() -> [(weekStart: Date, totalSets: Int, totalReps: Int)]`
-
-**Screens:**
-
-**`ProgressView.swift`** — Tab with segmented control:
-- Segment 1: Weight — `WeightChartView`
-- Segment 2: Workouts — `WorkoutConsistencyView`
-- Segment 3: Strength — `StrengthChartView`
-- Segment 4: Body — `MeasurementsView`
-
-**`WeightChartView.swift`**
-- Swift Charts `Chart` with:
-  - `LineMark` for raw weight (light, thin)
-  - `LineMark` for 7-day moving average (bold, accent colour)
-  - `RuleMark` for target weight (dashed horizontal)
-- Time range picker at top
-- Shows delta from start: "–2.3 kg from start"
-
-**`WorkoutConsistencyView.swift`**
-- Grid of small squares (GitHub-style heatmap), 7 columns (days) × N rows (weeks)
-- Green = completed, gray = missed, accent = today
-- Summary: "X workouts in the last 30 days"
-
-**`StrengthChartView.swift`**
-- Exercise picker (dropdown of all exercises in the plan)
-- `LineMark` chart showing total reps per session over time
-- Highlights personal bests with annotation
-
-**`MeasurementsView.swift`**
-- Spider/radar chart overlay: starting measurements vs current
-- Or simpler: grouped bar chart comparing start vs latest for each measurement
-- Table of all measurement entries
-
-**Test:** Add sample data (10 weight entries, 15 sessions with set logs, 3 measurement entries). All 4 chart views render correctly with real data. Time range filter works.
+**Verify**: Returns correct values if set in Health app. Returns nil gracefully if not set or access denied.
 
 ---
 
-### Step 2.5: Rest Timer Enhancement
+### Phase 5: Onboarding UI
 
-**Goal:** Polished rest timer with haptic feedback and optional sound.
+Each screen is a separate SwiftUI view. The `OnboardingContainerView` manages navigation between screens using a step index.
 
-**`RestTimerView.swift`**
-- Circular countdown animation (360° arc shrinking)
-- Large seconds display in center
-- "Skip" button below
-- Haptic feedback: `UIImpactFeedbackGenerator(style: .heavy).impactOccurred()` when timer hits 0
-- Optional sound: short chime using `AudioServicesPlaySystemSound`
+#### Step 5.1 — OnboardingContainerView
 
-**Integration in `WorkoutSessionViewModel`:**
-- Use `Timer.publish(every: 1, on: .main, in: .common)` for countdown
-- `restTimeRemaining` decrements each second
-- When hits 0: set `isResting = false`, fire haptic, play sound
+- Manages an `@State` variable `currentStep: Int` (0–6 mapping to screens 1–7).
+- Uses a `TabView` with `.tabViewStyle(.page(indexDisplayMode: .never))` or a custom transition for smooth screen-to-screen navigation.
+- Provides "Next" and "Back" navigation (except screen 1 has no back, screen 7 has no manual navigation).
+- Validates that required fields are filled before allowing "Next" on data-entry screens.
+- On final step completion, sets `AppState.isOnboardingComplete = true`.
 
-**Test:** Complete a set. Rest timer appears with correct seconds. Counts down visually. Haptic buzz at 0. Skip button works.
+**Verify**: Can navigate forward and backward through all 7 screens. Cannot skip required fields. State is maintained when navigating back.
 
----
+#### Step 5.2 — Screen 1: WelcomeView
 
-## Phase 3 — Adaptation Engine & Motivation (Weeks 9–12)
+- App logo / icon at top.
+- Headline: "Your AI Health Coach"
+- 3–4 concise points explaining what the app does:
+  - Reads your Apple Health data.
+  - Analyzes trends and patterns with AI.
+  - Provides daily personalized suggestions.
+  - All data stays on your device.
+- Single "Get Started" button → advances to screen 2.
+- No inputs, no permissions, no state to manage.
 
-### Step 3.1: Adaptation Engine
+**Verify**: Renders correctly. Button advances to next screen.
 
-**Goal:** The app detects when the user is ready to level up and calls Claude for an upgraded plan.
+#### Step 5.3 — Screen 2: PersonalInfoView
 
-**`AdaptationEngine.swift`**
-- `class AdaptationEngine`
-- Dependencies: `ModelContext`, `ClaudeAPIService`
+Fields:
+- **Date of birth**: Date picker (wheels or compact style). Max date = today. Required.
+- **Biological sex**: Segmented picker — Male / Female / Other. Required.
+- **Unit preference**: Segmented picker — Metric / Imperial. Default from device locale.
+- **Height**: If metric → single field in cm. If imperial → two fields: feet + inches.
+- **Weight**: If metric → field in kg. If imperial → field in lbs.
 
-**Method: `func evaluateReadiness(context: ModelContext) -> AdaptationTrigger?`**
-- Fetches last 2 weeks of `WorkoutSession` + `SetLog` data
-- Computes:
-  - `hitRate: Double` — percentage of sets where actualReps >= target reps (parse target to compare)
-  - `completionRate: Double` — percentage of scheduled workouts completed
-  - `avgDifficultyRating: Double?` — average of post-workout ratings
-- Returns an `AdaptationTrigger` if any condition is met:
-  - `.hitRateHigh` — hitRate >= 0.80 for 2 consecutive weeks
-  - `.allWorkoutsCompleted` — completionRate == 1.0 for 2 consecutive weeks
-  - `.tooEasy` — avgDifficultyRating <= 2.0 for last 3+ sessions
-  - `.userRequested` — user manually tapped "Make it harder"
-  - Returns `nil` if no trigger
+Behavior:
+- Pre-fill DOB and sex from HealthKit characteristics if available (via `HealthKitManager.getDateOfBirth()` and `getBiologicalSex()`). Show a subtle note: "Pre-filled from Apple Health. You can change these."
+- Validate: All fields required. Height and weight must be positive numbers.
+- On "Next": Create and save `UserProfile` to SwiftData (converting imperial input to metric for storage).
 
-**`AdaptationTrigger` enum:**
-- Cases: `hitRateHigh, allWorkoutsCompleted, tooEasy, userRequested`
-- Property: `description: String` — human readable reason
+**Verify**: Unit preference toggle switches height/weight input fields between metric/imperial. Pre-fill works when HealthKit data exists. Validation prevents advancing with empty/invalid fields. UserProfile is saved correctly in metric units regardless of display preference.
 
-**Method: `func requestAdaptation(trigger: AdaptationTrigger, context: ModelContext) async throws -> PlanAdaptationResponse`**
-- Gathers: current plan JSON, performance log (last 4 weeks), user profile
-- Calls `ClaudeAPIService.adaptPlan()`
-- Returns the adaptation response
+#### Step 5.4 — Screen 3: ScheduleView
 
-**`PerformanceLog` struct (for API payload):**
-```
-struct PerformanceLog: Codable {
-    let weeks: [WeekLog]
-    let weightTrend: [WeightDataPoint]
-    let averageDifficultyRating: Double?
-}
-struct WeekLog: Codable {
-    let weekNumber: Int
-    let workoutsCompleted: Int
-    let workoutsScheduled: Int
-    let exercises: [ExercisePerformance]
-}
-struct ExercisePerformance: Codable {
-    let name: String
-    let averageRepsAchieved: Double
-    let targetReps: String
-    let completionRate: Double
-}
-struct WeightDataPoint: Codable {
-    let date: String
-    let weightKg: Double
-}
-```
+Fields:
+- **Time zone**: Text display of auto-detected `TimeZone.current.identifier` (e.g., "Europe/Prague"). Button/link to "Change" which presents a searchable picker of all time zones.
+- **Typical wake time**: Time picker (hour + minute). Default 7:00 AM.
 
-**`PlanAdaptationResponse` struct:**
-```
-struct PlanAdaptationResponse: Codable {
-    let changes: [PlanChange]
-    let updatedMeals: MealPlanData?  // nil if no meal changes
-    let summary: String              // human-readable "here's what changed"
-    let newDifficulty: Int
-}
-struct PlanChange: Codable {
-    let exerciseName: String
-    let changeType: String           // "repsIncrease", "setsIncrease", "newExercise", "replaced", "tempoChange", "restDecrease"
-    let oldValue: String
-    let newValue: String
-    let reason: String
-}
-```
+On "Next": Update `UserProfile` with timezone and wake time.
 
-**Claude Adaptation Prompt (in `Prompts.swift`):**
-- System: "You are an adaptive fitness coach. Analyse the performance data and generate targeted improvements to the user's plan. Only change what needs changing. Return JSON matching the PlanAdaptationResponse schema."
-- User message: includes profile, current plan, performance log, trigger reason
-- Instruct Claude to return meal changes ONLY if weight loss has stalled or user has flagged meal fatigue
+**Verify**: Time zone is correctly auto-detected. Can override via searchable picker. Wake time picker works. Values saved to UserProfile.
 
-**Method: `func applyAdaptation(response: PlanAdaptationResponse, context: ModelContext)`**
-- Applies changes to the active Plan's exercises in SwiftData
-- Updates difficulty level
-- If meal changes exist, updates MealPlan
-- Stores the adaptation as a history record (for undo potential)
+#### Step 5.5 — Screen 4: HealthKitPermissionView
 
-**`AdaptationViewModel.swift`**
-- `@Observable class AdaptationViewModel`
-- Properties:
-  - `trigger: AdaptationTrigger?`
-  - `adaptation: PlanAdaptationResponse?`
-  - `isLoading: Bool = false`
-  - `showLevelUpBanner: Bool`
-  - `showDiffScreen: Bool = false`
-- Methods:
-  - `func checkForLevelUp(context: ModelContext)` — calls `AdaptationEngine.evaluateReadiness()`, sets `showLevelUpBanner` if trigger exists
-  - `func requestLevelUp() async` — calls `requestAdaptation()`, sets adaptation, shows diff screen
-  - `func acceptAdaptation(context: ModelContext)` — calls `applyAdaptation()`, dismisses
-  - `func declineAdaptation()` — dismisses, sets a cooldown (don't ask again for 1 week)
+Pre-permission screen:
+- Explanation of what data we'll access and why.
+- "HealthCoach needs access to your health data to provide personalized insights."
+- Brief list of categories: Activity, Heart, Sleep, Workouts, etc.
+- "Your data never leaves your device without your knowledge."
 
-**Screens:**
+Behavior:
+- "Grant Access" button → calls `HealthKitManager.requestAuthorization()`.
+- After authorization completes (regardless of what the user selected — we can't know), advance to next screen.
+- If HealthKit is not available (iPad), show an error message and do not allow proceeding.
 
-**`LevelUpBannerView.swift`** — Shown on dashboard when trigger detected:
-- Animated gradient border, flame icon
-- "You're crushing it! Ready to level up?"
-- Tap → navigates to diff screen
+**Verify**: Pre-permission screen renders. Button triggers HealthKit system dialog on real device. App handles both "allow all" and "deny all" gracefully (proceeds either way since we can't detect individual denials).
 
-**`PlanDiffView.swift`** — Shows what will change:
-- List of `PlanChange` items, each showing: exercise name, old → new value, reason
-- Meal changes section if applicable
-- "Accept All" button
-- "Customise" button (expands each change with a toggle to accept/reject individually) — nice to have
-- "Not Now" button
+#### Step 5.6 — Screen 5: APIKeyView
 
-**Integration:**
-- `DashboardViewModel` calls `AdaptationViewModel.checkForLevelUp()` on appear
-- After completing a workout session, also trigger a check
+- Explanation text: "HealthCoach uses Claude AI to analyze your health data. You'll need an Anthropic API key."
+- Link: "Get your API key →" opening `https://console.anthropic.com/` in Safari.
+- Secure text field for the API key (masked input like a password field).
+- Optional "Validate" button — makes a minimal API call to verify the key works. Shows success/error state.
+- On "Next": Store key in Keychain via `KeychainService.saveAPIKey()`.
 
-**Test:** Simulate 2 weeks of data where all reps are met. Adaptation engine returns `.hitRateHigh`. Banner appears on dashboard. Tap through to diff screen. Accept. Verify plan in SwiftData has updated values.
+**Verify**: Key is masked in the input field. Can paste a key. Key is stored in Keychain and retrievable via `getAPIKey()` after saving. Optional validation makes a real API call and shows result.
+
+#### Step 5.7 — Screen 6: NotificationPermissionView
+
+- Explanation text: "HealthCoach sends you a daily notification when your health insights are ready."
+- "Enable Notifications" button → calls `UNUserNotificationCenter.requestAuthorization(options: [.alert, .badge, .sound])`.
+- "Skip" option for users who don't want notifications.
+- After authorization (or skip), advance to next screen.
+
+**Verify**: Button triggers system notification permission dialog. Handles allow, deny, and skip. App proceeds regardless of choice.
+
+#### Step 5.8 — Screen 7: BackfillProgressView
+
+Behavior:
+- Automatically begins processing on appear.
+- Calls `HealthKitManager` to query historical data for all metrics.
+- Shows progress: "Importing your health history… X days processed"
+- Strategy:
+  - Query HealthKit for the date range: (earliest available data) → yesterday.
+  - Process day by day (or in weekly chunks for performance).
+  - For each day, create a `DailySummary` via `HealthDataAggregator` and save to SwiftData.
+- On completion: Set `AppState.isOnboardingComplete = true`, transition to `DashboardView`.
+- Handle edge case: No historical data available → show "No historical data found. We'll start collecting from today." and proceed.
+
+**Verify**: Progress indicator updates during processing. `DailySummary` rows are created in SwiftData for each historical day. Row count matches expected day range. Handles empty HealthKit gracefully. Transitions to dashboard on completion.
 
 ---
 
-### Step 3.2: Notification Service
+### Phase 6: HealthKit Queries & Aggregation
 
-**Goal:** Local notifications for workouts, meals, weigh-ins, and streaks.
+#### Step 6.1 — HealthKitManager: Quantity Queries
 
-**`NotificationService.swift`**
-- `class NotificationService`
+Query methods on `HealthKitManager`:
 
-**Method: `static func requestPermission() async -> Bool`**
-- `UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])`
+- `querySum(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, start: Date, end: Date) async throws -> Double?`
+  - Uses `HKStatisticsQuery` with `.cumulativeSum`.
+  - For: steps, distance, energy, flights, exercise time, stroke count, etc.
 
-**Method: `static func scheduleWorkoutReminder(time: DateComponents, dayOfWeek: Int, workoutTitle: String)`**
-- Creates `UNMutableNotificationContent` with title: "Time to train", body: "\(workoutTitle) is waiting for you"
-- Trigger: `UNCalendarNotificationTrigger` with hour, minute, weekday
-- Identifier: `"workout-reminder-\(dayOfWeek)"`
+- `queryAvg(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, start: Date, end: Date) async throws -> Double?`
+  - Uses `HKStatisticsQuery` with `.discreteAverage`.
+  - For: heart rate avg, HRV, walking speed, running metrics, cycling metrics, etc.
 
-**Method: `static func scheduleMealReminder(time: DateComponents, mealName: String)`**
-- Title: "Meal time", body: "\(mealName) — check your options"
-- Identifier: `"meal-\(mealName)"`
+- `queryMinMaxAvg(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, start: Date, end: Date) async throws -> (avg: Double?, min: Double?, max: Double?)`
+  - Uses `HKStatisticsQuery` with `.discreteAverage`, `.discreteMin`, `.discreteMax`.
+  - For: heartRate, respiratoryRate, oxygenSaturation, sleepingWristTemperature.
 
-**Method: `static func scheduleWeighInReminder(dayOfWeek: Int, time: DateComponents)`**
-- Title: "Weekly check-in", body: "Time to log your weight"
-- Weekly repeating trigger
+- `queryMostRecent(for identifier: HKQuantityTypeIdentifier, unit: HKUnit, before: Date) async throws -> Double?`
+  - Uses `HKSampleQuery` sorted by end date descending, limit 1.
+  - For: height, weight, BMI, sixMinuteWalkTestDistance.
 
-**Method: `static func scheduleStreakAtRisk(time: DateComponents)`**
-- Scheduled daily at e.g. 8 PM
-- Only fires if no workout was logged today (check via app logic — schedule it, but remove it in `WorkoutSessionViewModel.completeSession()`)
-- Title: "Don't break your streak!", body: "Your [N]-day streak is on the line"
+**Verify**: Each query type returns correct values against known HealthKit data. Returns nil when no data exists for the date range.
 
-**Method: `static func cancelAll()`** and **`static func cancelByIdentifier(_ id: String)`**
+#### Step 6.2 — HealthKitManager: Category Queries
 
-**`NotificationPreferences` (stored in `UserDefaults` or a small SwiftData model):**
-- `workoutReminderEnabled: Bool`, `workoutReminderTime: Date`
-- `mealRemindersEnabled: Bool`
-- `weighInDay: Int`, `weighInTime: Date`
-- `streakRemindersEnabled: Bool`
+- `querySleepAnalysis(start: Date, end: Date) async throws -> SleepBreakdown?`
+  - Returns: `(total: Double, inBed: Double, awake: Double, core: Double, deep: Double, rem: Double)` in hours.
+  - Queries `HKCategoryType(.sleepAnalysis)` and sums durations by `HKCategoryValueSleepAnalysis`.
+  - Handles overlapping samples (e.g., iPhone + Watch both recording sleep).
 
-**Settings Integration:**
-- Add a Notifications section in `SettingsView` with toggles and time pickers
-- On change, cancel existing notifications and reschedule
+- `queryCategoryCount(for identifier: HKCategoryTypeIdentifier, start: Date, end: Date) async throws -> Int`
+  - Counts occurrences for: `appleStandHour` (count of `.stood` only), `highHeartRateEvent`, `lowHeartRateEvent`, `irregularHeartRhythmEvent`.
 
-**Test:** Enable workout reminders for 7:00 AM on weekdays. Put app in background. Verify notification fires at correct time. Complete a workout — streak-at-risk notification for today should be cancelled.
+- `queryMindfulMinutes(start: Date, end: Date) async throws -> Double?`
+  - Sums durations of `mindfulSession` category samples.
 
----
+**Verify**: Sleep breakdown sums correctly. Stand hours count only "stood" values, not "idle". Event counts are accurate. Mindful minutes sum correctly.
 
-### Step 3.3: Weekly Recap
+#### Step 6.3 — HealthKitManager: Workout Queries
 
-**Goal:** Sunday evening recap card with Claude-generated commentary.
+- `queryWorkouts(start: Date, end: Date) async throws -> [WorkoutSummary]`
+  - Queries `HKWorkoutType.workoutType()` for the date range.
+  - For each `HKWorkout`: extracts activity type, duration, total energy, total distance, start/end time.
+  - Maps `HKWorkoutActivityType` to readable string.
+  - Returns array of `WorkoutSummary` objects.
 
-**`WeeklyRecapView.swift`**
-- Card showing:
-  - Week number and date range
-  - Workouts completed: "4/5"
-  - Total reps this week
-  - Weight change: "+0.2 kg" or "–0.5 kg" (compared to last week's entry)
-  - Claude's 2–3 sentence commentary
-- Shareable as image (render view to UIImage using `ImageRenderer`)
+**Verify**: Returns correct workout list for a given day. Handles days with no workouts (empty array). Multiple workout types on the same day are all captured.
 
-**`WeeklyPerformanceSummary` struct (for API call):**
-```
-struct WeeklyPerformanceSummary: Codable {
-    let workoutsCompleted: Int
-    let workoutsScheduled: Int
-    let totalReps: Int
-    let totalSets: Int
-    let exerciseHighlights: [String]    // e.g. "Push-up reps up 20%"
-    let weightChange: Double?
-    let currentStreak: Int
-    let difficultyRatings: [Int]
-}
-```
+#### Step 6.4 — HealthDataAggregator
 
-**Trigger:** Schedule a local notification for Sunday 7 PM. When user opens the recap (from notification or dashboard), the view calls `ClaudeAPIService.generateWeeklyRecap()` and displays the result.
+- `aggregateDay(date: Date) async throws -> DailySummary`
+  - Takes a date, computes start/end range, calls all relevant `HealthKitManager` query methods, and assembles a `DailySummary`.
+  - Calls the appropriate query method based on each metric's aggregation type (from `MetricDefinition`).
+  - Returns a fully populated `DailySummary` (with nil for any metric that had no data).
 
-**Test:** Add a full week of workout data. Open recap view. Claude returns a personalised comment. Card displays all stats correctly.
+- `backfillHistory(from startDate: Date, to endDate: Date, progress: (Int, Int) -> Void) async throws`
+  - Iterates day by day from `startDate` to `endDate`.
+  - Calls `aggregateDay()` for each day.
+  - Saves each `DailySummary` to SwiftData.
+  - Calls `progress(currentDay, totalDays)` for UI updates.
+  - Skips days that already exist in SwiftData (idempotent).
+
+**Verify**: `aggregateDay` produces a correct `DailySummary` for a known test day. `backfillHistory` creates the expected number of rows. Re-running backfill doesn't create duplicates.
 
 ---
 
-### Step 3.4: Streak Celebrations
+### Phase 7: Dashboard UI
 
-**Goal:** Animated celebrations at milestone streaks.
+After completing onboarding, the user lands on the daily view. This is the main screen of the app. For now it will be a shell — the Claude-powered summaries and suggestions will be added in a future phase.
 
-**Milestone thresholds:** 7, 14, 30, 60, 100, 200, 365 days.
+#### Step 7.1 — Tab Bar Structure
 
-**`StreakCelebrationView.swift`**
-- Full-screen overlay with:
-  - Confetti particle animation (use `CAEmitterLayer` or a SwiftUI particle system)
-  - Large streak number with flame icon
-  - Claude-generated congratulatory message (short, 1 sentence)
-  - "Keep Going" dismiss button
-- Triggered from `StreakService.updateStreak()` when `currentStreak` hits a milestone
+- Replace the single root view with a `TabView` containing two tabs:
+  - **Tab 1: "Today"** — `DashboardView` (daily insights)
+  - **Tab 2: "Profile"** — `ProfileView` (settings + debug)
+- Use SF Symbols for tab icons (e.g., `heart.text.square` for Today, `person.circle` for Profile).
+- After onboarding completes, the app always opens to the Today tab.
 
-**Streak Freeze Award:**
-- When user completes all 5 workouts in a week: `StreakRecord.freezesAvailable += 1` (max 3)
-- Freeze button in Settings or streak section: "Use freeze to protect your streak for 1 week"
-- When freeze is active: `graceUsedThisWeek` logic is extended to cover the full week
+**Verify**: Two tabs render at the bottom. Tapping switches between them. Correct icons and labels.
 
-**Test:** Set streak to 6 via debug. Complete workout. Streak hits 7 → celebration overlay appears with confetti. Dismiss and verify streak is 7.
+#### Step 7.2 — DashboardView (empty shell)
 
----
+- Top: Date display showing yesterday's date (since that's the day being analyzed), formatted per locale. Left/right arrows or swipe to navigate to previous days (reads from stored `DailySummary` history).
+- Middle: Empty state message — "No insights yet. Your first daily analysis will appear here tomorrow morning." (shown when no `HealthInsight` exists for the selected date).
+- Placeholder sections (visible but empty, ready for future content):
+  - **Overall Score** — circular score indicator (placeholder showing "—").
+  - **Suggestions** — empty list area with subtle text: "AI suggestions will appear here."
+  - **Data Summary** — collapsed/expandable section header: "Health Data" (no content yet).
+- Pull-to-refresh gesture (stub — will trigger data fetch + Claude call in future phase).
 
-## Phase 4 — Polish & Launch (Weeks 13–16)
+**Verify**: View renders with yesterday's date. Can navigate to previous dates. Empty state message shows when no insights exist. Pull-to-refresh gesture is recognized (even if it does nothing yet).
 
-### Step 4.1: StoreKit 2 Subscription
+#### Step 7.3 — DashboardView: Date Navigation & Data Loading
 
-**Goal:** Paywall, free trial, and subscription management.
+- When the user navigates to a different date, the view queries SwiftData for that date's `DailySummary` and `HealthInsight`.
+- If a `DailySummary` exists for the selected date, show a subtle indicator (e.g., a small dot or checkmark) confirming data was collected that day.
+- If no `DailySummary` exists, show "No data recorded for this date."
+- Limit backward navigation to the earliest stored `DailySummary` date. Disable forward navigation past yesterday.
 
-**`SubscriptionService.swift`**
-- Uses StoreKit 2 (`Product`, `Transaction`)
-- Method: `func fetchProducts() async throws -> [Product]` — loads monthly and annual products
-- Method: `func purchase(_ product: Product) async throws -> Transaction`
-- Method: `func checkEntitlement() async -> Bool` — checks `Transaction.currentEntitlements`
-- Method: `func restorePurchases() async`
-- Property: `isSubscribed: Bool` (published, checked app-wide)
-
-**`PaywallView.swift`**
-- Shown after 7-day free trial expires
-- Two cards: Monthly ($9.99/mo), Annual ($79.99/yr with "Save 33%" badge)
-- Feature comparison list
-- "Restore Purchases" link
-- Terms of service and privacy policy links (required by Apple)
-
-**App-wide gating:**
-- Free trial: check `UserProfile.createdAt` — if < 7 days ago, full access
-- After trial: check `SubscriptionService.isSubscribed`
-- Gated features: Claude API calls (plan generation, adaptation, meal swap, weekly recap)
-- Non-gated: workout tracking, logging, charts (so the app remains useful even expired)
-
-**StoreKit Configuration:**
-- Create StoreKit configuration file in Xcode for testing
-- Product IDs: `com.reforge.monthly`, `com.reforge.annual`
-
-**Test:** Launch app with fresh install. Use app for 7 days (adjust date in simulator). On day 8, paywall appears. Purchase in sandbox environment. Verify access restored.
+**Verify**: Navigating dates loads the correct `DailySummary` from SwiftData. Days with data show the indicator. Days without data show the empty message. Cannot navigate into the future or before earliest data.
 
 ---
 
-### Step 4.2: CloudKit Sync
+### Phase 8: Profile Tab
 
-**Goal:** iCloud sync for multi-device usage.
+The Profile tab lets the user view and edit all settings they configured during onboarding, plus access debug tools.
 
-**Implementation:**
-- SwiftData with CloudKit integration:
-  - Change `ModelContainer` configuration to use `CloudKitDatabase`
-  - Ensure all `@Model` classes use only CloudKit-compatible types
-  - No optional relationships pointing to non-optional models
-  - No unique constraints (CloudKit doesn't support them)
-- Requires: iCloud capability in Xcode, CloudKit container in Apple Developer portal
+#### Step 8.1 — ProfileView (main settings screen)
 
-**Constraints:**
-- All model properties must be optional or have defaults
-- Arrays must be stored as Codable data (not direct relationships) — verify SwiftData+CloudKit compatibility
-- If SwiftData+CloudKit doesn't work well, fallback: manual CloudKit records using `CKRecord` and `CKDatabase`
+- SwiftUI `Form` or `List` with grouped sections:
 
-**Settings toggle:**
-- `iCloudSyncEnabled: Bool` in `UserDefaults`
-- When toggled on: migrate local container to CloudKit container
-- When toggled off: keep local copy, stop syncing
+**Section: Personal Info**
+- Date of birth — tappable row showing current value, opens date picker to edit.
+- Biological sex — tappable row showing current value, opens picker to edit.
+- Height — tappable row showing current value in preferred units, opens input to edit.
+- Weight — tappable row showing current value in preferred units, opens input to edit.
 
-**Test:** Install on two devices (or device + simulator). Create data on device A. Verify it appears on device B after a short delay.
+**Section: Preferences**
+- Unit preference — toggle between Metric / Imperial. Changing this immediately updates all displayed values in the app.
+- Time zone — tappable row showing current timezone, opens searchable picker to edit.
+- Wake time — tappable row showing current time, opens time picker to edit.
 
----
+**Section: API**
+- API key — tappable row showing masked key (e.g., "sk-ant-...7x2f"). Tap to reveal/edit. Option to re-validate.
+- API usage — placeholder row: "Usage stats coming soon" (will show token counts and estimated cost in a future phase).
 
-### Step 4.3: Progress Photos
+**Section: Notifications**
+- Notification status — shows current permission state (Enabled / Disabled). If disabled, "Enable" button opens system settings.
 
-**Goal:** Camera integration with date overlay and side-by-side comparison.
+**Section: Data**
+- Debug — navigation link to `DebugDataView` (Phase 9).
 
-**`ProgressPhotoView.swift`**
-- Camera button → opens `UIImagePickerController` (or `PhotosPicker` for library)
-- After capture:
-  - Overlay: date stamp in corner, semi-transparent
-  - Save to app storage (not Photo Library) — store in app's documents directory
-  - Create a `ProgressPhoto` SwiftData model: `id, date, imagePath, notes`
+**Section: About**
+- App version.
+- "Built with Claude by Anthropic" (link to anthropic.com).
 
-**`PhotoComparisonView.swift`**
-- Two image slots: "Before" and "After"
-- Picker for each slot from stored progress photos (sorted by date)
-- Swipe or slider overlay to compare
+- All edits immediately update the `UserProfile` in SwiftData.
 
-**Storage:** Save images as JPEG to `FileManager.default.urls(for: .documentDirectory)`. Store only the filename in SwiftData. On iCloud sync (v2), images would need `CKAsset`.
+**Verify**: All current UserProfile values display correctly. Can edit each field. Changes persist after leaving and returning to the screen. Unit preference change updates height/weight display immediately. API key is masked by default.
 
-**Test:** Take 3 photos across different dates. Open comparison view. Select two photos. Side-by-side displays correctly.
+#### Step 8.2 — ProfileView: Edit Sheets
 
----
+- Each editable field opens a modal sheet or inline editor:
+  - DOB: Date picker sheet.
+  - Biological sex: Action sheet with options.
+  - Height/Weight: Text input sheet with unit label matching current preference. Input validated (positive numbers only). Converted to metric on save.
+  - Time zone: Searchable list sheet.
+  - Wake time: Time picker sheet.
+  - API key: Secure text field sheet with validate + save buttons.
+- All sheets have "Cancel" and "Save" actions.
 
-### Step 4.4: Design Polish & Micro-Interactions
-
-**Goal:** Refined visual design, animations, and transitions.
-
-**Global Theme (`Theme.swift`):**
-- `enum Theme` with static color properties matching the brand (dark primary, coral accent, teal success)
-- Custom font loading: choose a distinctive display font (e.g. from Google Fonts, bundled as .ttf)
-- `static func heading(_ text: String) -> some View` and similar convenience modifiers
-
-**Animations to add:**
-- Dashboard: stagger-in animation for cards on appear (offset + opacity, 0.1s delay between cards)
-- Workout session: exercise card transition (slide left out, slide right in) when advancing
-- Rest timer: pulsing circle animation
-- Nutrition ring: animated fill on appear (from 0 to current value)
-- Streak counter: flame icon subtle flicker animation (scale oscillation)
-- Tab bar: custom icon bounce on selection
-- Level-up banner: gradient shimmer animation
-
-**Haptics throughout:**
-- Light tap on button presses
-- Medium impact on set completion
-- Heavy impact + success notification on workout completion
-- Warning notification if streak is about to break
-
-**Transitions:**
-- `.matchedGeometryEffect` between workout card on dashboard and workout session header
-- Custom sheet presentations for logging overlays
-
-**Test:** Full app walkthrough feeling polished. No jarring transitions. Animations feel natural at 60fps.
+**Verify**: Each edit sheet opens, displays current value, allows modification, and saves correctly. Cancel discards changes. Invalid input shows error and prevents save.
 
 ---
 
-### Step 4.5: App Store Preparation
+### Phase 9: Debug View
 
-**Goal:** Everything needed for App Store submission.
+The debug view shows exactly what data the app has collected and what would be sent to Claude. This is essential for development and for power users who want to see the raw data.
 
-**Assets needed:**
-- App icon: 1024×1024 with variants auto-generated by Xcode
-- Screenshots: 6.7" (iPhone 15 Pro Max), 6.1" (iPhone 15 Pro), 5.5" (iPhone 8 Plus — if supporting)
-  - Screenshot 1: Dashboard with streak
-  - Screenshot 2: Workout session with 3D model
-  - Screenshot 3: Meal plan
-  - Screenshot 4: Progress charts
-  - Screenshot 5: Level-up diff screen
-- App preview video (optional but recommended): 15–30 second screen recording showing the core flow
-- App description: ~170 words, front-loaded with key features
-- Keywords: "fitness, workout, bodyweight, AI, personal trainer, meal plan, body recomposition"
-- Privacy policy URL (required)
-- Terms of service URL (required)
+#### Step 9.1 — DebugDataView: Daily Summary Browser
 
-**Pre-submission checklist:**
-- [ ] All screens work on all supported iPhone sizes
-- [ ] Dark mode support (or explicitly opt out)
-- [ ] VoiceOver accessibility labels on interactive elements
-- [ ] No crashes on first launch, onboarding, and core flows
-- [ ] Subscription flows tested in sandbox
-- [ ] Privacy nutrition labels filled in (App Store Connect)
-- [ ] No hardcoded API keys
-- [ ] Age rating: 4+ (fitness app, no objectionable content)
+- Accessible from Profile → Debug.
+- Top: Date picker to select any date that has stored data.
+- Main content: Displays the full `DailySummary` for the selected date, organized by category:
 
-**TestFlight:**
-- Archive build in Xcode → upload to App Store Connect
-- Create internal testing group (yourself)
-- Create external testing group (10–20 beta users)
-- Collect feedback for 1–2 weeks before public submission
+**Section: Activity & Fitness**
+- Each metric shown as a row: label, value (in user's preferred units), unit label.
+- Nil values shown as "—" (greyed out).
+
+**Section: Running Metrics**
+- Same row format.
+
+**Section: Cycling Metrics**
+- Same row format.
+
+**Section: Heart**
+- For heartRate: shows avg, min, max on the same row.
+- Other heart metrics: single value per row.
+
+**Section: Respiratory**
+- respiratoryRate: avg, min, max.
+- oxygenSaturation: avg, min.
+
+**Section: Body**
+- sleepingWristTemperature: avg, min, max.
+- Others: single value.
+
+**Section: Mobility**
+- Single value per row.
+
+**Section: Sleep**
+- Total hours + breakdown: inBed, awake, core, deep, REM.
+- Could use a simple horizontal stacked bar to visualize proportions.
+
+**Section: Events**
+- Stand hours, mindful minutes, heart rate events, irregular rhythm events.
+
+**Section: Workouts**
+- List of workouts for that day: type, duration, energy, distance.
+- "No workouts" if empty.
+
+**Verify**: All stored `DailySummary` fields display correctly for a selected date. Nil fields show "—". Units respect user preference (metric/imperial). All categories present and correctly grouped.
+
+#### Step 9.2 — DebugDataView: Aggregated Data View
+
+- A second tab or segment within the debug view: "Claude Data".
+- Shows the complete aggregated data that will be sent to Claude for the selected date, organized as Claude will receive it:
+
+**User Profile Context**
+- Age (computed from DOB), biological sex, height, weight (in user's preferred units).
+
+**Yesterday's Values**
+- All non-nil metrics from the selected date's `DailySummary`, grouped by category with their values and units.
+
+**Trend Comparisons (per metric)**
+- Day-of-week median (e.g., "Friday median: 10,400 steps").
+- This week total/avg vs last week total/avg.
+- Week median.
+- This month total/avg vs last month total/avg.
+- Month median.
+
+**Workouts**
+- List of workouts for that day with type, duration, energy, distance.
+
+Each row shows: metric name, the day's value, and each trend value side by side — making it easy to see exactly what context Claude will have.
+
+Note: Trend computations require `TrendCalculator` (future phase). Until implemented, trend columns show "—" placeholder. The daily values and user profile sections work immediately.
+
+"Copy as JSON" button — exports the full data structure as JSON to clipboard for debugging.
+
+**Verify**: Daily values match the Daily Summary Browser for the same date. User profile info is correct. Trend columns show "—" until TrendCalculator is built. Copy as JSON produces valid JSON. All non-nil metrics are represented.
+
+#### Step 9.3 — DebugDataView: Data Statistics
+
+- A third tab or segment: "Stats".
+- Shows aggregate information about the local data store:
+  - Total days stored.
+  - Date range: earliest → latest stored date.
+  - Days with data vs days without (percentage).
+  - Per-metric coverage: for each of the 49 metrics, show how many days have non-nil values (e.g., "stepCount: 342/365 days (93.7%)").
+  - Total workouts stored.
+  - Storage estimate (approximate SwiftData size).
+- "Re-run Backfill" button — triggers a new backfill for any missing days between earliest stored date and yesterday. Useful if the user granted more HealthKit permissions after initial onboarding.
+- "Delete All Data" button — with confirmation dialog. Clears all `DailySummary`, `WorkoutSummary`, and `HealthInsight` rows. Does not clear `UserProfile`.
+
+**Verify**: Statistics are accurate against known data. Per-metric coverage percentages are correct. Re-run backfill fills in missing days without creating duplicates. Delete all data clears the correct tables and the UI reflects the empty state.
 
 ---
 
-## Post-Launch Enhancements (Backlog)
+### Phase 10: Trend Calculator
 
-These are out of scope for v1 but documented for future reference:
+The trend calculator computes all comparative values from the local `DailySummary` store. These are used both in the debug view's aggregated data and in the Claude prompt.
 
-- [ ] Apple Watch companion app (workout tracking, haptic rest timer)
-- [ ] Apple Health integration (import/export weight, workouts, nutrition)
-- [ ] Social features: share workouts, challenge friends
-- [ ] Equipment-based exercises (add "equipment available" to onboarding, unlock dumbbell/band exercises)
-- [ ] AR mode: project 3D model into real space via ARKit
-- [ ] Widget: today's workout + streak on home screen
-- [ ] Siri Shortcuts: "Start my workout" voice command
-- [ ] Android version via KMP (Kotlin Multiplatform) or separate native build
-- [ ] Coach chat: in-app conversation with Claude for ad-hoc questions ("Can I substitute quinoa for rice?")
+#### Step 10.1 — TrendCalculator: Core Median & Aggregation Functions
+
+`TrendCalculator.swift` — operates on arrays of `DailySummary` fetched from SwiftData.
+
+Helper functions:
+- `median(_ values: [Double]) -> Double?` — returns median of non-nil values. Returns nil if array is empty.
+- `sum(_ values: [Double]) -> Double?` — returns sum. Nil if empty.
+- `average(_ values: [Double]) -> Double?` — returns mean. Nil if empty.
+
+These are generic helpers used by all trend computations below.
+
+**Verify**: `median([3, 1, 4, 1, 5])` returns 3.0. `median([1, 2])` returns 1.5. Empty array returns nil. Same for sum and average.
+
+#### Step 10.2 — TrendCalculator: Day-of-Week Median
+
+- `dayOfWeekMedian(for metric: KeyPath<DailySummary, Double?>, dayOfWeek: Int, from summaries: [DailySummary]) -> Double?`
+  - Filters all stored `DailySummary` rows where `dayOfWeek` matches.
+  - Extracts non-nil values for the given metric keypath.
+  - Returns the median.
+- Variant for sum-based metrics: `dayOfWeekMedianOfSums(...)` — for metrics like steps where the day-of-week median should be the median of daily totals, not individual samples.
+- Works with whatever history is available — 2 weeks or 2 years.
+
+**Verify**: Given 10 stored Fridays with step counts [8000, 9000, 10000, 11000, 12000, 7000, 9500, 10500, 11500, 8500], returns median of 9750. Handles days with nil values (skips them). Returns nil if no data exists for that weekday.
+
+#### Step 10.3 — TrendCalculator: Weekly Aggregates
+
+- `weeklyAggregate(for metric: KeyPath<DailySummary, Double?>, aggregation: AggregationType, weekStart: Date, from summaries: [DailySummary]) -> Double?`
+  - Filters summaries within the 7-day window starting at `weekStart`.
+  - Applies sum or avg depending on `aggregation` type.
+- Convenience methods:
+  - `thisWeek(for metric:, aggregation:, from:) -> Double?` — current calendar week.
+  - `lastWeek(for metric:, aggregation:, from:) -> Double?` — previous calendar week.
+- `weekMedian(for metric: KeyPath<DailySummary, Double?>, aggregation: AggregationType, from summaries: [DailySummary]) -> Double?`
+  - Groups all stored summaries into calendar weeks.
+  - Computes the sum or avg for each week.
+  - Returns the median of all weekly values (up to past year of data).
+
+**Verify**: Given 4 weeks of step data, `thisWeek` and `lastWeek` return correct sums. `weekMedian` returns the median of weekly totals. Partial weeks (e.g., current week only has 3 days so far) are handled correctly — still computed but not compared as if they were full weeks.
+
+#### Step 10.4 — TrendCalculator: Monthly Aggregates
+
+- `monthlyAggregate(for metric: KeyPath<DailySummary, Double?>, aggregation: AggregationType, monthStart: Date, from summaries: [DailySummary]) -> Double?`
+  - Filters summaries within the calendar month starting at `monthStart`.
+  - Applies sum or avg depending on `aggregation` type.
+- Convenience methods:
+  - `thisMonth(for metric:, aggregation:, from:) -> Double?` — current calendar month.
+  - `lastMonth(for metric:, aggregation:, from:) -> Double?` — previous calendar month.
+- `monthMedian(for metric: KeyPath<DailySummary, Double?>, aggregation: AggregationType, from summaries: [DailySummary]) -> Double?`
+  - Groups all stored summaries into calendar months.
+  - Computes the sum or avg for each month.
+  - Returns the median of all monthly values (up to past year of data).
+
+**Verify**: Given 3 months of data, `thisMonth` and `lastMonth` return correct values. `monthMedian` returns median of monthly totals. Months with varying day counts (28 vs 31) are handled. Partial current month is computed with available data.
+
+#### Step 10.5 — TrendCalculator: Full Trend Report
+
+- `computeTrends(for date: Date, from summaries: [DailySummary]) -> TrendReport`
+- `TrendReport` struct containing, for each of the 49 metrics:
+  - `dayValue: Double?` — the metric's value on the given date.
+  - `dayOfWeekMedian: Double?`
+  - `thisWeek: Double?`
+  - `lastWeek: Double?`
+  - `weekMedian: Double?`
+  - `thisMonth: Double?`
+  - `lastMonth: Double?`
+  - `monthMedian: Double?`
+- This is the single entry point called by both the debug view and the future Claude prompt builder.
+- Internally iterates all metrics from `MetricDefinition`, applies the correct aggregation type per metric, and assembles the report.
+- Performance consideration: fetches all summaries once, passes the array to each computation. Avoids repeated SwiftData queries.
+
+**Verify**: `TrendReport` for a given date contains correct values across all metrics and all trend dimensions. Performance is acceptable (< 1 second) with 365 days of stored data. Nil metrics propagate correctly (if a metric has no data, all its trend values are nil).
+
+#### Step 10.6 — Wire TrendCalculator into Debug View
+
+- Update `AggregatedDataView` (Step 9.2) to call `TrendCalculator.computeTrends()` and display real trend values instead of "—" placeholders.
+- Each metric row now shows: day value, day-of-week median, this week, last week, week median, this month, last month, month median.
+- "Copy as JSON" now includes real trend data in the export.
+
+**Verify**: Trend columns in the debug view show real computed values. Values match manual spot-check calculations. JSON export includes all trend data.
+
+---
+
+### Phase 11: Automated Daily Data Collection
+
+This phase ensures that HealthKit data is collected and stored every day without user intervention. No Claude integration — purely local data pipeline.
+
+#### Step 11.1 — DailyDataService: Orchestrator
+
+`DailyDataService.swift` — coordinates daily data collection.
+
+- `collectData(for date: Date) async throws -> DailySummary`
+  - Steps:
+    1. Check if a `DailySummary` already exists for this date in SwiftData. If yes, return it (idempotent).
+    2. Call `HealthDataAggregator.aggregateDay(date:)` to query HealthKit and create the summary.
+    3. Save the `DailySummary` to SwiftData.
+    4. Query and save any `WorkoutSummary` records for the date.
+    5. Return the `DailySummary`.
+- `needsCollection(for date: Date) -> Bool` — checks if a `DailySummary` exists for the date.
+- `collectMissedDays() async throws -> Int`
+  - Finds the most recent stored `DailySummary` date.
+  - For each day between that date and yesterday, calls `collectData()`.
+  - Returns the number of days collected.
+  - Caps at 30 missed days to avoid excessive HealthKit queries after long inactivity.
+
+**Verify**: Collecting data for a date with HealthKit data creates and stores a `DailySummary`. Collecting the same date again returns the existing row without re-querying. `collectMissedDays` fills gaps correctly. Already-collected days are skipped.
+
+#### Step 11.2 — BackgroundTaskManager: Registration
+
+`BackgroundTaskManager.swift` — manages `BGProcessingTask` scheduling.
+
+- Register the background task identifier in `HealthCoachApp.swift` on launch:
+  - Identifier: `com.healthcoach.dailyCollection`
+  - Register via `BGTaskScheduler.shared.register(forTaskWithIdentifier:using:launchHandler:)`.
+- Add the identifier to `Info.plist` under `BGTaskSchedulerPermittedIdentifiers`.
+- `scheduleNextCollection()`:
+  - Creates a `BGProcessingTaskRequest` with the identifier.
+  - Sets `earliestBeginDate` to today at 00:01 (using user's configured timezone).
+  - Sets `requiresNetworkConnectivity = false` (purely local — no API call needed).
+  - Sets `requiresExternalPower = false`.
+  - Submits via `BGTaskScheduler.shared.submit()`.
+
+**Verify**: Background task is registered on app launch. Task request is submitted with correct earliest begin date. `requiresNetworkConnectivity` is false. Identifier is in Info.plist.
+
+#### Step 11.3 — BackgroundTaskManager: Task Execution
+
+- `handleDailyCollection(task: BGProcessingTask)`:
+  - Called by the system when the background task fires.
+  - Sets `task.expirationHandler` to cancel gracefully if the system reclaims resources.
+  - Determines yesterday's date (in the user's configured timezone).
+  - Calls `DailyDataService.collectData(for: yesterday)`.
+  - Also calls `DailyDataService.collectMissedDays()` to catch any gaps.
+  - On completion (success or failure):
+    - Calls `scheduleNextCollection()` to schedule tomorrow's task.
+    - Calls `task.setTaskCompleted(success:)`.
+  - No notification posted — this is silent background work. Notifications will be added when Claude integration arrives.
+
+**Verify**: Task handler calls the data collection pipeline. Task is rescheduled regardless of outcome. No network required. Handles expiration gracefully without crashing.
+
+#### Step 11.4 — App-Open Fallback Check
+
+Since iOS doesn't guarantee background task execution, the app checks on every foreground entry.
+
+- In `HealthCoachApp.swift` or `AppState`, add a `scenePhase` handler:
+  - When the app enters foreground and onboarding is complete:
+    - Call `DailyDataService.needsCollection(for: yesterday)`.
+    - If true, run `DailyDataService.collectData(for: yesterday)` in a background Swift Task.
+    - Also call `DailyDataService.collectMissedDays()` to fill any gaps.
+    - Show a subtle indicator on the dashboard (e.g., small spinner or "Syncing health data…" text) while it runs.
+    - On completion, refresh the dashboard and debug views.
+- This is non-blocking — user can navigate the app while collection runs.
+
+**Verify**: Opening the app when yesterday's data is missing triggers collection automatically. Dashboard updates when done. Multiple missed days are caught up. Already-collected days are skipped. App remains responsive during collection.
+
+#### Step 11.5 — Schedule Initial Task After Onboarding
+
+- At the end of onboarding (when `BackfillProgressView` completes), call `BackgroundTaskManager.scheduleNextCollection()` to queue the first background task.
+- This ensures the daily cycle begins immediately after setup.
+
+**Verify**: After completing onboarding, a background task is scheduled. Can verify via Xcode's background task debugger that the task is pending.
+
+---
+
+### Phase 12: Daily Data View & Manual Input
+
+This phase builds out the main daily view with interactive date navigation and the ability to manually input health data.
+
+#### Step 12.1 — Date Header & Navigation
+
+- At the top of `DashboardView`, replace the simple date display with an interactive date header:
+  - Shows the currently selected date in a clear format (e.g., "Friday, Feb 27, 2026").
+  - **Tap** the date → opens a calendar date picker allowing the user to jump to any specific date.
+  - **Swipe left** on the view → moves to the previous day (always available as long as stored data exists).
+  - **Swipe right** on the view → moves to the next day. Disabled / no-op if already on yesterday (cannot go into the future past yesterday since today's data isn't complete yet).
+- The date picker should highlight dates that have stored `DailySummary` data (e.g., with a dot indicator).
+- Limit the date picker range: earliest stored `DailySummary` date → yesterday.
+- Swipe gesture should have a smooth transition animation.
+
+**Verify**: Tapping the date opens the calendar picker. Swiping left moves to previous day. Swiping right moves to next day. Cannot swipe past yesterday. Cannot select future dates in the picker. Dates with stored data are visually indicated in the picker.
+
+#### Step 12.2 — Daily Data Placeholder Content
+
+- Below the date header, show a scrollable view of the day's data (if a `DailySummary` exists for the selected date).
+- For now, display a simple grouped list by category showing available metrics and their values (similar to debug view but styled for the user):
+  - Category headers: Activity, Running, Cycling, Heart, Respiratory, Body, Mobility, Sleep, Events, Workouts.
+  - Each metric: label + value in user's preferred units.
+  - Nil metrics: hidden (don't show "—" rows to the user, unlike debug view).
+  - Empty categories: hidden entirely.
+- If no `DailySummary` exists for the selected date, show: "No data recorded for this date."
+- This is placeholder content — will be replaced with Claude-powered insights and richer visualizations in a future phase.
+
+**Verify**: Navigating to a date with data shows metrics grouped by category. Nil metrics and empty categories are hidden. Navigating to a date without data shows the empty message. Values respect unit preference.
+
+#### Step 12.3 — Manual Input: Plus Button & Action Sheet
+
+- Add a "+" button in the top-right corner of the `DashboardView` (or as a floating action button).
+- Tapping it presents an action sheet or bottom sheet with a list of manually inputtable metrics.
+- For now, the only option is: **"Log Weight"**.
+- The list is designed to be extensible — future options could include: blood pressure, blood glucose, water intake, symptoms, etc.
+- The action sheet shows the options with icons and labels.
+
+**Verify**: Plus button is visible and tappable. Action sheet appears with "Log Weight" option. Sheet dismisses on cancel or outside tap.
+
+#### Step 12.4 — Manual Input: Weight Entry View
+
+- Selecting "Log Weight" opens a modal sheet:
+  - **Date**: Pre-filled with the currently selected date on the dashboard. Tappable to change.
+  - **Weight input**: Numeric text field with the appropriate unit label (kg or lbs based on preference).
+  - **Keyboard**: Decimal number pad.
+  - Pre-fill with the most recent stored weight (from `DailySummary` or `UserProfile`) as a reference, shown as placeholder text.
+  - "Save" button:
+    - Converts to metric (kg) if user is on imperial.
+    - Writes the value to HealthKit via `HKHealthStore.save()` (this requires the `NSHealthUpdateUsageDescription` we added in Phase 1).
+    - Updates the `UserProfile.weight` with the new value.
+    - If a `DailySummary` exists for that date, updates its `bodyMass` field.
+    - If no `DailySummary` exists, creates one with just the weight value (other fields nil).
+    - Dismisses the sheet.
+  - "Cancel" button: Dismisses without saving.
+- Validation: Weight must be a positive number. Show inline error for invalid input.
+
+**Verify**: Modal opens with correct unit label. Can enter a decimal weight. Pre-fills with last known weight as placeholder. Save writes to HealthKit and updates local store. Cancel discards. Invalid input (negative, zero, non-numeric) shows error and prevents save. `UserProfile.weight` is updated. Dashboard view refreshes to show the new weight.
+
+#### Step 12.5 — HealthKitManager: Write Support
+
+- Add write capability to `HealthKitManager`:
+  - `saveWeight(_ kg: Double, date: Date) async throws`
+    - Creates an `HKQuantitySample` for `bodyMass` with the given value and date.
+    - Saves via `healthStore.save()`.
+- Update `allShareTypes` (was previously `nil` in authorization):
+  - Add `bodyMass` to the share (write) types set.
+  - This means the HealthKit permission dialog will now also show write permissions for weight.
+- Note: This requires updating the authorization request. Users who already completed onboarding may need to re-authorize via the Health app settings (the app can prompt them if a write fails due to missing permission).
+
+**Verify**: Can write a weight sample to HealthKit. The sample appears in the Health app. Authorization request includes write access for body mass. Write failure due to missing permission is caught and shows a user-friendly message.
+
+---
+
+### Phase 13: Notifications
+
+This phase implements a flexible notification system where users can configure which notifications they want, plus debug-specific notifications for development.
+
+#### Step 13.1 — NotificationManager: Core Service
+
+`NotificationManager.swift` — manages all notification types.
+
+- `requestPermission() async -> Bool` — requests notification authorization, returns whether granted.
+- `isPermissionGranted() async -> Bool` — checks current authorization status.
+- `scheduleNotification(id: String, title: String, body: String, at dateComponents: DateComponents, repeats: Bool) async throws` — schedules a local notification.
+- `cancelNotification(id: String)` — cancels a specific pending notification.
+- `cancelAllNotifications()` — cancels all pending notifications.
+- `getPendingNotifications() async -> [UNNotificationRequest]` — lists all scheduled notifications.
+- Each notification type has a unique string identifier (used for scheduling and canceling).
+
+**Verify**: Can schedule a notification and see it in `getPendingNotifications()`. Can cancel by ID. Permission request triggers system dialog. `isPermissionGranted()` returns correct status.
+
+#### Step 13.2 — Notification Settings Model
+
+- Add notification preferences to `UserProfile` (or a separate `NotificationSettings` SwiftData model):
+  - `dailyCollectionNotification: Bool` (default: false) — debug: notifies when daily data collection succeeds.
+  - `weightReminderEnabled: Bool` (default: false) — reminds user to log weight.
+  - `weightReminderTime: Date` (default: 8:00 AM) — time of day for the weight reminder.
+- Extensible design: new notification types can be added as new Bool + time properties.
+
+**Verify**: Settings model saves and loads correctly. Default values are applied on first creation.
+
+#### Step 13.3 — Notification Settings UI
+
+- Add a **"Notifications"** section in `ProfileView`, replacing the simple status row from Phase 8:
+
+**Subsection: System**
+- Row showing current permission status (Enabled / Disabled).
+- If disabled: "Enable in Settings" button that opens iOS Settings via `UIApplication.openSettings()`.
+
+**Subsection: Reminders**
+- **Weight Reminder**: Toggle (on/off) + time picker (visible when on).
+  - When toggled on: calls `NotificationManager.scheduleNotification()` with a daily repeating trigger at the selected time.
+  - When toggled off: calls `NotificationManager.cancelNotification()` for the weight reminder ID.
+  - When time is changed: cancels and reschedules with new time.
+
+**Subsection: Debug Notifications**
+- **Data Collection Success**: Toggle (on/off).
+  - When on: `DailyDataService` will post a notification after successful daily collection.
+  - When off: collection runs silently.
+- This section could be hidden behind a "Show Debug Options" toggle or only visible when accessed from the Debug view. For now, keep it visible in the Profile tab for development convenience.
+
+**Verify**: All toggles save their state. Enabling weight reminder schedules a notification at the correct time. Disabling it cancels the pending notification. Changing time reschedules. Debug toggle persists. System permission status is accurate.
+
+#### Step 13.4 — Weight Reminder Notification: Deep Link
+
+- When the weight reminder notification fires and the user taps it, the app should open directly to the weight input view.
+- Implementation:
+  - Set a `userInfo` dictionary on the notification with a key like `"action": "logWeight"`.
+  - In `HealthCoachApp.swift`, handle `UNUserNotificationCenterDelegate.userNotificationCenter(_:didReceive:)`.
+  - When the response's `userInfo` contains `"action": "logWeight"`:
+    - Set a flag in `AppState` (e.g., `pendingAction: .logWeight`).
+    - The `DashboardView` observes this flag and presents the weight input sheet when it's set.
+    - Clear the flag after the sheet is presented.
+- Should work whether the app was in foreground, background, or terminated.
+
+**Verify**: Tapping the weight reminder notification opens the app and immediately presents the weight input sheet. Works from terminated state (cold launch). Works from background. Works from foreground. The sheet shows today's date pre-filled. After dismissing the sheet, the app behaves normally.
+
+#### Step 13.5 — Debug Notification: Data Collection Success
+
+- Update `DailyDataService` (from Phase 11) to post a local notification after successful data collection, but only when the debug notification toggle is enabled.
+- After `collectData()` completes successfully:
+  - Check `NotificationSettings.dailyCollectionNotification`.
+  - If true, post an immediate notification:
+    - Title: "Data Collection Complete"
+    - Body: "Successfully collected health data for [date]. [X] metrics recorded."
+    - The body should include a count of non-nil metrics in the `DailySummary`.
+  - If false, do nothing (silent).
+- This fires from both the background task and the app-open fallback.
+
+**Verify**: With debug toggle on: notification appears after successful data collection showing correct date and metric count. With toggle off: no notification. Works from background task execution. Works from app-open fallback.
+
+#### Step 13.6 — Reschedule Notifications on Settings Change
+
+- When the user changes their wake time (in Profile → Schedule settings), any time-based notifications should be re-evaluated:
+  - Weight reminder: stays at its own configured time (independent of wake time).
+  - Future notifications (like Claude insights) may depend on wake time — design the system so `NotificationManager` has a `rescheduleAll()` method that re-reads all settings and updates pending notifications accordingly.
+- When the user changes timezone:
+  - Reschedule all time-based notifications to fire at the correct local time in the new timezone.
+- `rescheduleAll()` is called whenever `UserProfile.timeZone` or `UserProfile.wakeTime` is updated.
+
+**Verify**: Changing timezone reschedules notifications to the correct new local time. Changing wake time triggers reschedule. Pending notifications in `getPendingNotifications()` reflect the updated schedule. No duplicate notifications are created.
+
+---
+
+### Future Phases (not in current scope)
+
+Documented for reference but will not be implemented in this plan:
+
+- **Phase 14: Claude Integration** — PromptBuilder, ClaudeService, API key validation, DailyAnalysisService orchestrator, response parsing and storage.
+- **Phase 15: Dashboard Content** — Populate daily view with Claude suggestions, scores, data summaries, and trend charts.
+- **Phase 16: Notification Refinement** — Claude insight ready notifications, summary previews in notification body, action buttons.
+- **Phase 17: Additional Manual Inputs** — Blood pressure, blood glucose, water intake, symptoms, mood, and other manually logged metrics.
+- **Phase 18: Settings Expansion** — View API usage/costs, export data, manage history, theme preferences.
+- **Phase 19: Backend Migration** — Move API key to lightweight server proxy.

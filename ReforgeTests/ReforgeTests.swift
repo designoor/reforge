@@ -2,10 +2,11 @@
 //  ReforgeTests.swift
 //  ReforgeTests
 //
-//  Created by ryowa on 26.02.2026.
+//  Created by ryowa on 01.03.2026.
 //
 
 import Testing
+@testable import Reforge
 
 struct ReforgeTests {
 
