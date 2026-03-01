@@ -8,33 +8,13 @@ struct ContentView: View {
             if appState.isOnboardingComplete {
                 DashboardPlaceholderView()
             } else {
-                OnboardingPlaceholderView()
+                OnboardingContainerView()
             }
         }
     }
 }
 
 // MARK: - Placeholder Views (replaced in later steps)
-
-private struct OnboardingPlaceholderView: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Onboarding")
-                .font(.largeTitle.bold())
-
-            Text("Step \(appState.currentOnboardingStep + 1)")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-
-            Button("Complete Onboarding") {
-                appState.isOnboardingComplete = true
-            }
-            .buttonStyle(.borderedProminent)
-        }
-    }
-}
 
 private struct DashboardPlaceholderView: View {
     @Environment(AppState.self) private var appState
