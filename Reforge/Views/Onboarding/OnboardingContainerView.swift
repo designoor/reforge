@@ -47,6 +47,7 @@ struct OnboardingContainerView: View {
     @State private var currentStep = 0
     @State private var canAdvance = true
     @State private var navigationDirection: NavigationDirection = .forward
+    @State private var onAdvanceAction: (() -> Void)?
 
     private enum NavigationDirection {
         case forward, backward
@@ -90,7 +91,7 @@ struct OnboardingContainerView: View {
         case .welcome:
             WelcomeView(canAdvance: $canAdvance)
         case .personalInfo:
-            OnboardingStepPlaceholder(step: .personalInfo, canAdvance: $canAdvance)
+            PersonalInfoView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .schedule:
             OnboardingStepPlaceholder(step: .schedule, canAdvance: $canAdvance)
         case .healthKitPermission:
@@ -140,6 +141,8 @@ struct OnboardingContainerView: View {
 
     private func goForward() {
         guard canAdvance, currentStep < OnboardingStep.allCases.count - 1 else { return }
+        onAdvanceAction?()
+        onAdvanceAction = nil
         navigationDirection = .forward
         withAnimation(.easeInOut(duration: 0.3)) {
             currentStep += 1
