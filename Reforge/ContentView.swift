@@ -1,61 +1,70 @@
-//
-//  ContentView.swift
-//  Reforge
-//
-//  Created by ryowa on 01.03.2026.
-//
-
 import SwiftUI
-import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Environment(AppState.self) private var appState
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
-        }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
+        Group {
+            if appState.isOnboardingComplete {
+                DashboardPlaceholderView()
+            } else {
+                OnboardingPlaceholderView()
             }
         }
     }
 }
 
-#Preview {
+// MARK: - Placeholder Views (replaced in later steps)
+
+private struct OnboardingPlaceholderView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Onboarding")
+                .font(.largeTitle.bold())
+
+            Text("Step \(appState.currentOnboardingStep + 1)")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Button("Complete Onboarding") {
+                appState.isOnboardingComplete = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+}
+
+private struct DashboardPlaceholderView: View {
+    @Environment(AppState.self) private var appState
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Text("Dashboard")
+                .font(.largeTitle.bold())
+
+            Text("Welcome to Reforge")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+
+            Button("Reset Onboarding") {
+                appState.isOnboardingComplete = false
+                appState.currentOnboardingStep = 0
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+}
+
+#Preview("Onboarding") {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .environment(AppState())
+}
+
+#Preview("Dashboard") {
+    let state = AppState()
+    state.isOnboardingComplete = true
+    return ContentView()
+        .environment(state)
 }
