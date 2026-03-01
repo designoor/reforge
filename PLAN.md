@@ -403,7 +403,7 @@ All health fields are optional (`nil` = no data for that day). Unique constraint
 
 **Verify**: Can create a `DailySummary` with partial data (some fields nil). Can save, fetch, and query by date range. No duplicate dates allowed.
 
-#### Step 2.4 — WorkoutSummary Model
+#### Step 2.4 — WorkoutSummary Model ✅
 
 SwiftData `@Model` class. Multiple rows per day (one per workout). Properties:
 
@@ -420,7 +420,7 @@ Can be queried by date to associate with a `DailySummary`.
 
 **Verify**: Can create multiple workouts for the same day. Can query all workouts for a given date range.
 
-#### Step 2.5 — HealthInsight Model (stub)
+#### Step 2.5 — HealthInsight Model (stub) ✅
 
 SwiftData `@Model` class. One row per day (when Claude responds). Properties:
 

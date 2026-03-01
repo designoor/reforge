@@ -29,7 +29,7 @@ final class WorkoutSummary {
         endTime: Date,
         createdAt: Date = Date()
     ) {
-        self.date = Calendar.current.startOfDay(for: date)
+        self.date = DateHelpers.startOfDay(for: date)
         self.workoutType = workoutType
         self.duration = duration
         self.totalEnergyBurned = totalEnergyBurned
