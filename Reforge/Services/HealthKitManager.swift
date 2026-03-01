@@ -292,4 +292,85 @@ enum HealthKitManager {
         }
         return seconds / 60
     }
+
+    // MARK: - Workout Queries
+
+    private static func fetchWorkouts(
+        start: Date,
+        end: Date
+    ) async throws -> [HKWorkout] {
+        let workoutType = HKWorkoutType.workoutType()
+        let predicate = HKQuery.predicateForSamples(
+            withStart: start,
+            end: end,
+            options: .strictStartDate
+        )
+        let sortDescriptor = NSSortDescriptor(
+            key: HKSampleSortIdentifierStartDate,
+            ascending: true
+        )
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: workoutType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let workouts = (samples as? [HKWorkout]) ?? []
+                continuation.resume(returning: workouts)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    private static func readableWorkoutType(
+        _ activityType: HKWorkoutActivityType
+    ) -> String {
+        switch activityType {
+        case .running: "Running"
+        case .cycling: "Cycling"
+        case .walking: "Walking"
+        case .swimming: "Swimming"
+        case .hiking: "Hiking"
+        case .yoga: "Yoga"
+        case .functionalStrengthTraining: "Strength Training"
+        case .highIntensityIntervalTraining: "HIIT"
+        case .dance: "Dance"
+        case .cooldown: "Cooldown"
+        case .coreTraining: "Core Training"
+        case .elliptical: "Elliptical"
+        case .rowing: "Rowing"
+        case .stairClimbing: "Stair Climbing"
+        case .pilates: "Pilates"
+        case .tennis: "Tennis"
+        case .basketball: "Basketball"
+        case .soccer: "Soccer"
+        default: "Workout"
+        }
+    }
+
+    static func queryWorkouts(
+        start: Date,
+        end: Date
+    ) async throws -> [WorkoutSummary] {
+        let workouts = try await fetchWorkouts(start: start, end: end)
+        return workouts.map { workout in
+            WorkoutSummary(
+                date: workout.startDate,
+                workoutType: readableWorkoutType(workout.workoutActivityType),
+                duration: workout.duration,
+                totalEnergyBurned: workout.totalEnergyBurned?
+                    .doubleValue(for: .kilocalorie()),
+                totalDistance: workout.totalDistance?
+                    .doubleValue(for: .meter()),
+                startTime: workout.startDate,
+                endTime: workout.endDate
+            )
+        }
+    }
 }
