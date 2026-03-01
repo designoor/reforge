@@ -437,9 +437,9 @@ This is a stub for now — will be fully implemented when Claude integration is 
 
 ---
 
-### Phase 3: Utility Services
+### Phase 3: Utility Services ✅
 
-#### Step 3.1 — DateHelpers
+#### Step 3.1 — DateHelpers ✅
 
 `DateHelpers.swift` — static utility functions:
 
@@ -455,7 +455,7 @@ This is a stub for now — will be fully implemented when Claude integration is 
 
 **Verify**: Unit-testable. Correct at edge cases: start of year, daylight saving transitions, different calendar locales.
 
-#### Step 3.2 — UnitConverter
+#### Step 3.2 — UnitConverter ✅
 
 `UnitConverter.swift` — static utility for metric ↔ imperial:
 
@@ -469,7 +469,7 @@ This is a stub for now — will be fully implemented when Claude integration is 
 
 **Verify**: Conversion accuracy. Round-trip conversions (kg → lbs → kg) return original value within floating-point tolerance.
 
-#### Step 3.3 — KeychainService
+#### Step 3.3 — KeychainService ✅
 
 `KeychainService.swift` — wrapper around Security framework:
 
