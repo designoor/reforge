@@ -268,7 +268,7 @@ HealthCoach/
 
 **Verify**: Project builds and runs on simulator. HealthKit entitlement visible in project settings.
 
-#### Step 1.2 — App Entry Point & State
+#### ~~Step 1.2 — App Entry Point & State~~ ✅
 
 - `HealthCoachApp.swift`: Set up SwiftData `ModelContainer` with all model types. Root view checks `AppState` to decide whether to show onboarding or dashboard.
 - `AppState.swift`: Observable class that tracks `isOnboardingComplete` (persisted via `@AppStorage`). Tracks current onboarding step index.

@@ -1,15 +1,10 @@
-//
-//  ReforgeApp.swift
-//  Reforge
-//
-//  Created by ryowa on 01.03.2026.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct ReforgeApp: App {
+    @State private var appState = AppState()
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Item.self,
@@ -26,6 +21,7 @@ struct ReforgeApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(appState)
         }
         .modelContainer(sharedModelContainer)
     }
