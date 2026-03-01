@@ -88,7 +88,7 @@ struct OnboardingContainerView: View {
     private var currentStepView: some View {
         switch step {
         case .welcome:
-            OnboardingStepPlaceholder(step: .welcome, canAdvance: $canAdvance)
+            WelcomeView(canAdvance: $canAdvance)
         case .personalInfo:
             OnboardingStepPlaceholder(step: .personalInfo, canAdvance: $canAdvance)
         case .schedule:
