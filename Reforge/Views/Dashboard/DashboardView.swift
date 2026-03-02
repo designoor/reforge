@@ -8,9 +8,14 @@ struct DashboardView: View {
     @State private var selectedDate: Date = DateHelpers.yesterday()
     @State private var isDataSummaryExpanded = false
 
-    private var hasInsightForSelectedDate: Bool {
+    private var selectedSummary: DailySummary? {
         let normalized = DateHelpers.startOfDay(for: selectedDate)
-        return healthInsights.contains { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
+        return dailySummaries.first { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
+    }
+
+    private var selectedInsight: HealthInsight? {
+        let normalized = DateHelpers.startOfDay(for: selectedDate)
+        return healthInsights.first { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
     }
 
     private var earliestDate: Date? {
@@ -18,8 +23,8 @@ struct DashboardView: View {
     }
 
     private var canGoBack: Bool {
-        guard let earliest = earliestDate else { return true }
-        return selectedDate > earliest
+        guard let earliest = earliestDate else { return false }
+        return DateHelpers.startOfDay(for: selectedDate) > DateHelpers.startOfDay(for: earliest)
     }
 
     private var canGoForward: Bool {
@@ -39,7 +44,9 @@ struct DashboardView: View {
                 VStack(spacing: 24) {
                     dateHeader
 
-                    if !hasInsightForSelectedDate {
+                    if selectedSummary == nil {
+                        noDataView
+                    } else if selectedInsight == nil {
                         emptyStateView
                     }
 
@@ -75,8 +82,22 @@ struct DashboardView: View {
 
             Spacer()
 
-            Text(formattedDate)
-                .font(.headline)
+            VStack(spacing: 4) {
+                Text(formattedDate)
+                    .font(.headline)
+
+                if selectedSummary != nil {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+
+                        Text("Data collected")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
 
             Spacer()
 
@@ -90,6 +111,22 @@ struct DashboardView: View {
             .disabled(!canGoForward)
         }
         .padding(.vertical, 8)
+    }
+
+    // MARK: - No Data
+
+    private var noDataView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "calendar.badge.exclamationmark")
+                .font(.system(size: 40))
+                .foregroundStyle(Color(.systemGray3))
+
+            Text("No data recorded for this date.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 24)
     }
 
     // MARK: - Empty State
