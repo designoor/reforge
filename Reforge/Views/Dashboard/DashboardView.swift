@@ -1,23 +1,180 @@
 import SwiftUI
+import SwiftData
 
 struct DashboardView: View {
+    @Query(sort: \DailySummary.date) private var dailySummaries: [DailySummary]
+    @Query private var healthInsights: [HealthInsight]
+
+    @State private var selectedDate: Date = DateHelpers.yesterday()
+    @State private var isDataSummaryExpanded = false
+
+    private var hasInsightForSelectedDate: Bool {
+        let normalized = DateHelpers.startOfDay(for: selectedDate)
+        return healthInsights.contains { Calendar.current.isDate($0.date, inSameDayAs: normalized) }
+    }
+
+    private var earliestDate: Date? {
+        dailySummaries.first?.date
+    }
+
+    private var canGoBack: Bool {
+        guard let earliest = earliestDate else { return true }
+        return selectedDate > earliest
+    }
+
+    private var canGoForward: Bool {
+        let yesterday = DateHelpers.yesterday()
+        return DateHelpers.startOfDay(for: selectedDate) < yesterday
+    }
+
+    private var formattedDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMM d, yyyy"
+        return formatter.string(from: selectedDate)
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Text("Today")
-                    .font(.largeTitle.bold())
+            ScrollView {
+                VStack(spacing: 24) {
+                    dateHeader
 
-                Text("Your daily health insights will appear here.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+                    if !hasInsightForSelectedDate {
+                        emptyStateView
+                    }
+
+                    overallScoreSection
+                    suggestionsSection
+                    dataSummarySection
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .refreshable {
+                // Stub — will trigger data fetch + Claude call in a future phase
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.large)
         }
+    }
+
+    // MARK: - Date Header
+
+    private var dateHeader: some View {
+        HStack {
+            Button {
+                selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate)!
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(canGoBack ? Color.accentColor : Color(.systemGray3))
+            }
+            .disabled(!canGoBack)
+
+            Spacer()
+
+            Text(formattedDate)
+                .font(.headline)
+
+            Spacer()
+
+            Button {
+                selectedDate = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate)!
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(canGoForward ? Color.accentColor : Color(.systemGray3))
+            }
+            .disabled(!canGoForward)
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Empty State
+
+    private var emptyStateView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 40))
+                .foregroundStyle(Color(.systemGray3))
+
+            Text("No insights yet")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+
+            Text("Your first daily analysis will appear here tomorrow morning.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.vertical, 24)
+    }
+
+    // MARK: - Overall Score
+
+    private var overallScoreSection: some View {
+        VStack(spacing: 12) {
+            Text("Overall Score")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ZStack {
+                Circle()
+                    .stroke(Color(.systemGray4), lineWidth: 8)
+                    .frame(width: 100, height: 100)
+
+                Text("—")
+                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Suggestions
+
+    private var suggestionsSection: some View {
+        VStack(spacing: 12) {
+            Text("Suggestions")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Text("AI suggestions will appear here.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: - Data Summary
+
+    private var dataSummarySection: some View {
+        DisclosureGroup(isExpanded: $isDataSummaryExpanded) {
+            Text("Health metrics will appear here.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .padding(.top, 8)
+        } label: {
+            Text("Health Data")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 
 #Preview {
     DashboardView()
+        .modelContainer(for: [DailySummary.self, HealthInsight.self], inMemory: true)
 }
