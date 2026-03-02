@@ -6,33 +6,20 @@ struct ContentView: View {
     var body: some View {
         Group {
             if appState.isOnboardingComplete {
-                DashboardPlaceholderView()
+                TabView {
+                    DashboardView()
+                        .tabItem {
+                            Label("Today", systemImage: "heart.text.square")
+                        }
+
+                    ProfileView()
+                        .tabItem {
+                            Label("Profile", systemImage: "person.circle")
+                        }
+                }
             } else {
                 OnboardingContainerView()
             }
-        }
-    }
-}
-
-// MARK: - Placeholder Views (replaced in later steps)
-
-private struct DashboardPlaceholderView: View {
-    @Environment(AppState.self) private var appState
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("Dashboard")
-                .font(.largeTitle.bold())
-
-            Text("Welcome to Reforge")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-
-            Button("Reset Onboarding") {
-                appState.isOnboardingComplete = false
-                appState.currentOnboardingStep = 0
-            }
-            .buttonStyle(.bordered)
         }
     }
 }
