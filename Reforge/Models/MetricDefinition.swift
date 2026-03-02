@@ -21,6 +21,21 @@ enum MetricCategory: String, CaseIterable, Codable {
     case sleep
     case events
     case workout
+
+    var displayName: String {
+        switch self {
+        case .activity: "Activity & Fitness"
+        case .running: "Running"
+        case .cycling: "Cycling"
+        case .heart: "Heart"
+        case .respiratory: "Respiratory"
+        case .body: "Body"
+        case .mobility: "Mobility"
+        case .sleep: "Sleep"
+        case .events: "Events"
+        case .workout: "Workouts"
+        }
+    }
 }
 
 enum MetricKind {
