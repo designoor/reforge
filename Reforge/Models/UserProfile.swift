@@ -1,6 +1,30 @@
 import Foundation
 import SwiftData
 
+// MARK: - BiologicalSexOption
+
+enum BiologicalSexOption: String, CaseIterable, Identifiable {
+    case male
+    case female
+    case other
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .male: "Male"
+        case .female: "Female"
+        case .other: "Other"
+        }
+    }
+
+    static func from(_ string: String) -> BiologicalSexOption {
+        BiologicalSexOption(rawValue: string) ?? .other
+    }
+}
+
+// MARK: - UserProfile
+
 @Model
 final class UserProfile {
     var dateOfBirth: Date
