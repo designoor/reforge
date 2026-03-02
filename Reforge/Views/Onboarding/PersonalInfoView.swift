@@ -2,24 +2,6 @@ import SwiftUI
 import SwiftData
 import HealthKit
 
-// MARK: - BiologicalSexOption
-
-private enum BiologicalSexOption: String, CaseIterable, Identifiable {
-    case male
-    case female
-    case other
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .male: "Male"
-        case .female: "Female"
-        case .other: "Other"
-        }
-    }
-}
-
 // MARK: - PersonalInfoView
 
 struct PersonalInfoView: View {

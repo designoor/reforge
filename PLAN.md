@@ -252,43 +252,6 @@ HealthCoach/
 
 ## Implementation Phases
 
-### Phase 7: Dashboard UI
-
-After completing onboarding, the user lands on the daily view. This is the main screen of the app. For now it will be a shell — the Claude-powered summaries and suggestions will be added in a future phase.
-
-#### Step 7.1 — Tab Bar Structure
-
-- Replace the single root view with a `TabView` containing two tabs:
-  - **Tab 1: "Today"** — `DashboardView` (daily insights)
-  - **Tab 2: "Profile"** — `ProfileView` (settings + debug)
-- Use SF Symbols for tab icons (e.g., `heart.text.square` for Today, `person.circle` for Profile).
-- After onboarding completes, the app always opens to the Today tab.
-
-**Verify**: Two tabs render at the bottom. Tapping switches between them. Correct icons and labels.
-
-#### Step 7.2 — DashboardView (empty shell)
-
-- Top: Date display showing yesterday's date (since that's the day being analyzed), formatted per locale. Left/right arrows or swipe to navigate to previous days (reads from stored `DailySummary` history).
-- Middle: Empty state message — "No insights yet. Your first daily analysis will appear here tomorrow morning." (shown when no `HealthInsight` exists for the selected date).
-- Placeholder sections (visible but empty, ready for future content):
-  - **Overall Score** — circular score indicator (placeholder showing "—").
-  - **Suggestions** — empty list area with subtle text: "AI suggestions will appear here."
-  - **Data Summary** — collapsed/expandable section header: "Health Data" (no content yet).
-- Pull-to-refresh gesture (stub — will trigger data fetch + Claude call in future phase).
-
-**Verify**: View renders with yesterday's date. Can navigate to previous dates. Empty state message shows when no insights exist. Pull-to-refresh gesture is recognized (even if it does nothing yet).
-
-#### Step 7.3 — DashboardView: Date Navigation & Data Loading
-
-- When the user navigates to a different date, the view queries SwiftData for that date's `DailySummary` and `HealthInsight`.
-- If a `DailySummary` exists for the selected date, show a subtle indicator (e.g., a small dot or checkmark) confirming data was collected that day.
-- If no `DailySummary` exists, show "No data recorded for this date."
-- Limit backward navigation to the earliest stored `DailySummary` date. Disable forward navigation past yesterday.
-
-**Verify**: Navigating dates loads the correct `DailySummary` from SwiftData. Days with data show the indicator. Days without data show the empty message. Cannot navigate into the future or before earliest data.
-
----
-
 ### Phase 8: Profile Tab
 
 The Profile tab lets the user view and edit all settings they configured during onboarding, plus access debug tools.
@@ -774,5 +737,5 @@ Documented for reference but will not be implemented in this plan:
 - **Phase 15: Dashboard Content** — Populate daily view with Claude suggestions, scores, data summaries, and trend charts.
 - **Phase 16: Notification Refinement** — Claude insight ready notifications, summary previews in notification body, action buttons.
 - **Phase 17: Additional Manual Inputs** — Blood pressure, blood glucose, water intake, symptoms, mood, and other manually logged metrics.
-- **Phase 18: Settings Expansion** — View API usage/costs, export data, manage history, theme preferences.
+- **Phase 18: Settings Expansion** — View API usage/costs, export data, manage history, theme preferences. Improve error handling for Keychain operations in `ProfileView.saveAPIKey()` (currently uses `try?` which silently swallows errors — should surface save failures to the user via an alert).
 - **Phase 19: Backend Migration** — Move API key to lightweight server proxy.
