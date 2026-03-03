@@ -442,4 +442,227 @@ struct TrendCalculatorTests {
         // Weekly avgs: [68, 72, 76] → median = 72
         #expect(result == 72.0)
     }
+
+    // MARK: - monthlyAggregate
+
+    @Test func monthlyAggregate_sumFullMonth() {
+        // 31 days of January 2026 with 10000 steps each
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        )
+        let summaries = (0..<31).map { offset in
+            let date = Calendar.current.date(byAdding: .day, value: offset, to: monthStart)!
+            let day = Calendar.current.component(.day, from: date)
+            return makeSummary(year: 2026, month: 1, day: day, steps: 10000)
+        }
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.steps, aggregation: .sum, monthStart: monthStart, from: summaries
+        )
+        #expect(result == 310000.0)
+    }
+
+    @Test func monthlyAggregate_avgFullMonth() {
+        // 28 days of February 2026 with varying heart rate
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+        )
+        let summaries = (0..<28).map { offset in
+            let date = Calendar.current.date(byAdding: .day, value: offset, to: monthStart)!
+            let day = Calendar.current.component(.day, from: date)
+            return makeSummary(year: 2026, month: 2, day: day, heartRateAvg: 70.0)
+        }
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.heartRateAvg, aggregation: .avg, monthStart: monthStart, from: summaries
+        )
+        #expect(result == 70.0)
+    }
+
+    @Test func monthlyAggregate_partialMonth() {
+        // Only 3 days have step data in January
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        )
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 1, steps: 8000),
+            makeSummary(year: 2026, month: 1, day: 15, steps: 10000),
+            makeSummary(year: 2026, month: 1, day: 31, steps: 12000),
+        ]
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.steps, aggregation: .sum, monthStart: monthStart, from: summaries
+        )
+        #expect(result == 30000.0)
+    }
+
+    @Test func monthlyAggregate_emptyMonth() {
+        // No summaries in January, data is in February
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        )
+        let summaries = [
+            makeSummary(year: 2026, month: 2, day: 1, steps: 5000),
+        ]
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.steps, aggregation: .sum, monthStart: monthStart, from: summaries
+        )
+        #expect(result == nil)
+    }
+
+    @Test func monthlyAggregate_skipsNilMetricValues() {
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        )
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 1, steps: 8000),
+            makeSummary(year: 2026, month: 1, day: 2, steps: nil),
+            makeSummary(year: 2026, month: 1, day: 3, steps: 12000),
+        ]
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.steps, aggregation: .sum, monthStart: monthStart, from: summaries
+        )
+        #expect(result == 20000.0)
+    }
+
+    @Test func monthlyAggregate_doubleKeypath() {
+        let monthStart = DateHelpers.startOfMonth(
+            for: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        )
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 1, heartRateAvg: 65.0),
+            makeSummary(year: 2026, month: 1, day: 2, heartRateAvg: 70.0),
+            makeSummary(year: 2026, month: 1, day: 3, heartRateAvg: 75.0),
+        ]
+        let result = TrendCalculator.monthlyAggregate(
+            for: \.heartRateAvg, aggregation: .avg, monthStart: monthStart, from: summaries
+        )
+        #expect(result == 70.0)
+    }
+
+    // MARK: - thisMonth / lastMonth
+
+    @Test func thisMonth_returnsCorrectSum() {
+        // Full January 2026
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let summaries = (1...31).map { day in
+            makeSummary(year: 2026, month: 1, day: day, steps: 10000)
+        }
+        let result = TrendCalculator.thisMonth(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        #expect(result == 310000.0)
+    }
+
+    @Test func lastMonth_returnsCorrectSum() {
+        // Reference in February, data in January
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 10))!
+        let summaries = (1...31).map { day in
+            makeSummary(year: 2026, month: 1, day: day, steps: 8000)
+        }
+        let result = TrendCalculator.lastMonth(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        #expect(result == 248000.0)
+    }
+
+    @Test func thisMonth_partialData() {
+        // Only 3 days of data in January
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 20))!
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 1, steps: 5000),
+            makeSummary(year: 2026, month: 1, day: 10, steps: 6000),
+            makeSummary(year: 2026, month: 1, day: 20, steps: 7000),
+        ]
+        let result = TrendCalculator.thisMonth(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        #expect(result == 18000.0)
+    }
+
+    @Test func thisMonth_intKeypath() {
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 1, steps: 5000),
+            makeSummary(year: 2026, month: 1, day: 2, steps: 6000),
+        ]
+        let result = TrendCalculator.thisMonth(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        #expect(result == 11000.0)
+    }
+
+    // MARK: - monthMedian
+
+    @Test func monthMedian_threeMonths() {
+        // 3 full months of step data with different monthly totals
+        var summaries: [DailySummary] = []
+        let dailyValues = [9000, 10000, 11000]
+        let monthDays = [31, 28, 31] // Jan, Feb, Mar 2026
+
+        for monthIndex in 0..<3 {
+            for day in 1...monthDays[monthIndex] {
+                summaries.append(makeSummary(year: 2026, month: monthIndex + 1, day: day, steps: dailyValues[monthIndex]))
+            }
+        }
+
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 15))!
+        let result = TrendCalculator.monthMedian(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        // Monthly sums: Jan=279000, Feb=280000, Mar=341000 → median = 280000
+        #expect(result == 280000.0)
+    }
+
+    @Test func monthMedian_skipsMonthsWithNoMetricData() {
+        // 3 months: Jan has steps, Feb has only heartRate, Mar has steps
+        var summaries: [DailySummary] = []
+
+        // January: steps = 10000/day
+        for day in 1...31 {
+            summaries.append(makeSummary(year: 2026, month: 1, day: day, steps: 10000))
+        }
+
+        // February: only heartRate, no steps
+        for day in 1...28 {
+            summaries.append(makeSummary(year: 2026, month: 2, day: day, heartRateAvg: 72.0))
+        }
+
+        // March: steps = 14000/day
+        for day in 1...31 {
+            summaries.append(makeSummary(year: 2026, month: 3, day: day, steps: 14000))
+        }
+
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 15))!
+        let result = TrendCalculator.monthMedian(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: summaries
+        )
+        // Only 2 months with step data: Jan=310000, Mar=434000 → median = 372000
+        #expect(result == 372000.0)
+    }
+
+    @Test func monthMedian_emptySummaries() {
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let result = TrendCalculator.monthMedian(
+            for: \.steps, aggregation: .sum, relativeTo: referenceDate, from: []
+        )
+        #expect(result == nil)
+    }
+
+    @Test func monthMedian_doubleKeypath() {
+        // 3 months of heart rate averages
+        var summaries: [DailySummary] = []
+        let monthlyAvgs: [Double] = [68.0, 72.0, 76.0]
+        let monthDays = [31, 28, 31]
+
+        for monthIndex in 0..<3 {
+            for day in 1...monthDays[monthIndex] {
+                summaries.append(makeSummary(year: 2026, month: monthIndex + 1, day: day, heartRateAvg: monthlyAvgs[monthIndex]))
+            }
+        }
+
+        let referenceDate = Calendar.current.date(from: DateComponents(year: 2026, month: 4, day: 15))!
+        let result = TrendCalculator.monthMedian(
+            for: \.heartRateAvg, aggregation: .avg, relativeTo: referenceDate, from: summaries
+        )
+        // Monthly avgs: [68, 72, 76] → median = 72
+        #expect(result == 72.0)
+    }
 }

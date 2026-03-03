@@ -197,4 +197,143 @@ enum TrendCalculator {
         }
         return median(weeklyValues)
     }
+
+    // MARK: - Monthly Aggregates
+
+    /// Aggregates a `Double?` metric over a calendar month starting at `monthStart`.
+    /// Uses `sum` for `.sum` aggregation, `average` for `.avg`/`.avgMinMax`/`.avgMin`,
+    /// and the most recent non-nil value (by date) for `.mostRecent`.
+    /// Returns `nil` if no summaries have a non-nil value in the month.
+    static func monthlyAggregate(
+        for metric: KeyPath<DailySummary, Double?>,
+        aggregation: MetricAggregation,
+        monthStart: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let monthEnd = Calendar.current.date(byAdding: .month, value: 1, to: monthStart)!
+        let filtered = summaries.filter { $0.date >= monthStart && $0.date < monthEnd }
+        let values = filtered.compactMap { $0[keyPath: metric] }
+        guard !values.isEmpty else { return nil }
+
+        switch aggregation {
+        case .sum:
+            return sum(values)
+        case .avg, .avgMinMax, .avgMin:
+            return average(values)
+        case .mostRecent:
+            return filtered
+                .sorted { $0.date < $1.date }
+                .last { $0[keyPath: metric] != nil }
+                .flatMap { $0[keyPath: metric] }
+        }
+    }
+
+    /// Aggregates an `Int?` metric over a calendar month starting at `monthStart`.
+    /// Converts integer values to `Double` before aggregating.
+    static func monthlyAggregate(
+        for metric: KeyPath<DailySummary, Int?>,
+        aggregation: MetricAggregation,
+        monthStart: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let monthEnd = Calendar.current.date(byAdding: .month, value: 1, to: monthStart)!
+        let filtered = summaries.filter { $0.date >= monthStart && $0.date < monthEnd }
+        let values = filtered.compactMap { $0[keyPath: metric] }.map { Double($0) }
+        guard !values.isEmpty else { return nil }
+
+        switch aggregation {
+        case .sum:
+            return sum(values)
+        case .avg, .avgMinMax, .avgMin:
+            return average(values)
+        case .mostRecent:
+            return filtered
+                .sorted { $0.date < $1.date }
+                .last { $0[keyPath: metric] != nil }
+                .flatMap { $0[keyPath: metric] }
+                .map { Double($0) }
+        }
+    }
+
+    /// Returns the aggregate of a `Double?` metric for the current calendar month containing `relativeTo`.
+    static func thisMonth(
+        for metric: KeyPath<DailySummary, Double?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let monthStart = DateHelpers.startOfMonth(for: date)
+        return monthlyAggregate(for: metric, aggregation: aggregation, monthStart: monthStart, from: summaries)
+    }
+
+    /// Returns the aggregate of an `Int?` metric for the current calendar month containing `relativeTo`.
+    static func thisMonth(
+        for metric: KeyPath<DailySummary, Int?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let monthStart = DateHelpers.startOfMonth(for: date)
+        return monthlyAggregate(for: metric, aggregation: aggregation, monthStart: monthStart, from: summaries)
+    }
+
+    /// Returns the aggregate of a `Double?` metric for the calendar month before the one containing `relativeTo`.
+    static func lastMonth(
+        for metric: KeyPath<DailySummary, Double?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let thisMonthStart = DateHelpers.startOfMonth(for: date)
+        let lastMonthStart = Calendar.current.date(byAdding: .month, value: -1, to: thisMonthStart)!
+        return monthlyAggregate(for: metric, aggregation: aggregation, monthStart: lastMonthStart, from: summaries)
+    }
+
+    /// Returns the aggregate of an `Int?` metric for the calendar month before the one containing `relativeTo`.
+    static func lastMonth(
+        for metric: KeyPath<DailySummary, Int?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let thisMonthStart = DateHelpers.startOfMonth(for: date)
+        let lastMonthStart = Calendar.current.date(byAdding: .month, value: -1, to: thisMonthStart)!
+        return monthlyAggregate(for: metric, aggregation: aggregation, monthStart: lastMonthStart, from: summaries)
+    }
+
+    /// Returns the median of monthly aggregates for a `Double?` metric over the past year.
+    /// Groups summaries into calendar months, computes the aggregate for each month,
+    /// and returns the median of those monthly values. Months with no non-nil data are skipped.
+    static func monthMedian(
+        for metric: KeyPath<DailySummary, Double?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let cutoff = Calendar.current.date(byAdding: .month, value: -12, to: DateHelpers.startOfMonth(for: date))!
+        let recentSummaries = summaries.filter { $0.date >= cutoff }
+
+        let monthStarts = Set(recentSummaries.map { DateHelpers.startOfMonth(for: $0.date) })
+        let monthlyValues = monthStarts.compactMap { monthStart in
+            monthlyAggregate(for: metric, aggregation: aggregation, monthStart: monthStart, from: recentSummaries)
+        }
+        return median(monthlyValues)
+    }
+
+    /// Returns the median of monthly aggregates for an `Int?` metric over the past year.
+    static func monthMedian(
+        for metric: KeyPath<DailySummary, Int?>,
+        aggregation: MetricAggregation,
+        relativeTo date: Date,
+        from summaries: [DailySummary]
+    ) -> Double? {
+        let cutoff = Calendar.current.date(byAdding: .month, value: -12, to: DateHelpers.startOfMonth(for: date))!
+        let recentSummaries = summaries.filter { $0.date >= cutoff }
+
+        let monthStarts = Set(recentSummaries.map { DateHelpers.startOfMonth(for: $0.date) })
+        let monthlyValues = monthStarts.compactMap { monthStart in
+            monthlyAggregate(for: metric, aggregation: aggregation, monthStart: monthStart, from: recentSummaries)
+        }
+        return median(monthlyValues)
+    }
 }
