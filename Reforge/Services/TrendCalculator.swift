@@ -1,6 +1,22 @@
 import Foundation
 import SwiftData
 
+struct MetricTrend {
+    let dayValue: Double?
+    let dayOfWeekMedian: Double?
+    let thisWeek: Double?
+    let lastWeek: Double?
+    let weekMedian: Double?
+    let thisMonth: Double?
+    let lastMonth: Double?
+    let monthMedian: Double?
+}
+
+struct TrendReport {
+    let date: Date
+    let trends: [MetricDefinition: MetricTrend]
+}
+
 enum TrendCalculator {
 
     /// Returns the median of the given values, or `nil` if the array is empty.
@@ -335,5 +351,51 @@ enum TrendCalculator {
             monthlyAggregate(for: metric, aggregation: aggregation, monthStart: monthStart, from: recentSummaries)
         }
         return median(monthlyValues)
+    }
+
+    // MARK: - Full Trend Report
+
+    /// Computes all trend dimensions for all metrics on the given date.
+    /// Fetches all summaries once and passes the array to each computation to avoid repeated queries.
+    static func computeTrends(for date: Date, from summaries: [DailySummary]) -> TrendReport {
+        let normalizedDate = DateHelpers.startOfDay(for: date)
+        let daySummary = summaries.first { $0.date == normalizedDate }
+        let dayOfWeek = DateHelpers.dayOfWeek(for: normalizedDate)
+
+        var trends: [MetricDefinition: MetricTrend] = [:]
+
+        for metric in MetricDefinition.allCases {
+            guard let keyPath = metric.dailySummaryKeyPath else { continue }
+            let aggregation = metric.aggregation
+
+            let trend: MetricTrend
+            switch keyPath {
+            case .double(let kp):
+                trend = MetricTrend(
+                    dayValue: daySummary?[keyPath: kp],
+                    dayOfWeekMedian: self.dayOfWeekMedian(for: kp, dayOfWeek: dayOfWeek, from: summaries),
+                    thisWeek: self.thisWeek(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    lastWeek: self.lastWeek(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    weekMedian: self.weekMedian(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    thisMonth: self.thisMonth(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    lastMonth: self.lastMonth(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    monthMedian: self.monthMedian(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries)
+                )
+            case .int(let kp):
+                trend = MetricTrend(
+                    dayValue: daySummary?[keyPath: kp].map { Double($0) },
+                    dayOfWeekMedian: self.dayOfWeekMedian(for: kp, dayOfWeek: dayOfWeek, from: summaries),
+                    thisWeek: self.thisWeek(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    lastWeek: self.lastWeek(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    weekMedian: self.weekMedian(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    thisMonth: self.thisMonth(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    lastMonth: self.lastMonth(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries),
+                    monthMedian: self.monthMedian(for: kp, aggregation: aggregation, relativeTo: normalizedDate, from: summaries)
+                )
+            }
+            trends[metric] = trend
+        }
+
+        return TrendReport(date: normalizedDate, trends: trends)
     }
 }
