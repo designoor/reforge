@@ -26,7 +26,7 @@ struct DebugDataView: View {
             case .dailySummary:
                 DailySummaryBrowserView()
             case .claudeData:
-                placeholderView("Claude Data coming in Step 9.2")
+                AggregatedDataView()
             case .stats:
                 placeholderView("Stats coming in Step 9.3")
             }
