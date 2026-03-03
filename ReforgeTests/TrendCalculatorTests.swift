@@ -10,10 +10,22 @@ struct TrendCalculatorTests {
     private func makeSummary(
         year: Int, month: Int, day: Int,
         steps: Int? = nil,
-        heartRateAvg: Double? = nil
+        heartRateAvg: Double? = nil,
+        activeEnergyBurned: Double? = nil,
+        vo2Max: Double? = nil,
+        bodyMass: Double? = nil,
+        standHoursCount: Int? = nil
     ) -> DailySummary {
         let date = Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
-        return DailySummary(date: date, steps: steps, heartRateAvg: heartRateAvg)
+        return DailySummary(
+            date: date,
+            steps: steps,
+            activeEnergyBurned: activeEnergyBurned,
+            vo2Max: vo2Max,
+            heartRateAvg: heartRateAvg,
+            bodyMass: bodyMass,
+            standHoursCount: standHoursCount
+        )
     }
 
     // MARK: - median
@@ -664,5 +676,128 @@ struct TrendCalculatorTests {
         )
         // Monthly avgs: [68, 72, 76] → median = 72
         #expect(result == 72.0)
+    }
+
+    // MARK: - computeTrends
+
+    @Test func computeTrends_returnsCorrectDayValue() {
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 15, steps: 10000, heartRateAvg: 72.0),
+        ]
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        #expect(report.trends[.stepCount]?.dayValue == 10000.0)
+        #expect(report.trends[.heartRate]?.dayValue == 72.0)
+    }
+
+    @Test func computeTrends_returnsNilDayValueForMissingDate() {
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 10, steps: 5000),
+        ]
+        // Query a date with no summary
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        #expect(report.trends[.stepCount]?.dayValue == nil)
+    }
+
+    @Test func computeTrends_computesDayOfWeekMedian() {
+        // Create 3 Fridays with different step counts
+        // Jan 2, 9, 16, 2026 are Fridays
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 2, steps: 8000),
+            makeSummary(year: 2026, month: 1, day: 9, steps: 10000),
+            makeSummary(year: 2026, month: 1, day: 16, steps: 12000),
+        ]
+        // Query for Jan 16 (a Friday)
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 16))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        // Median of [8000, 10000, 12000] = 10000
+        #expect(report.trends[.stepCount]?.dayOfWeekMedian == 10000.0)
+    }
+
+    @Test func computeTrends_computesWeeklyTrends() {
+        // Two weeks of data: Mon Jan 5 - Sun Jan 18, 2026
+        // Week 1 (Jan 5-11): 7000 steps/day = 49000 total
+        // Week 2 (Jan 12-18): 9000 steps/day = 63000 total
+        var summaries: [DailySummary] = []
+        for day in 5...11 {
+            summaries.append(makeSummary(year: 2026, month: 1, day: day, steps: 7000))
+        }
+        for day in 12...18 {
+            summaries.append(makeSummary(year: 2026, month: 1, day: day, steps: 9000))
+        }
+
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        let stepTrend = report.trends[.stepCount]
+        #expect(stepTrend?.thisWeek != nil)
+        #expect(stepTrend?.lastWeek != nil)
+    }
+
+    @Test func computeTrends_computesMonthlyTrends() {
+        // Two months of data
+        var summaries: [DailySummary] = []
+        for day in 1...31 {
+            summaries.append(makeSummary(year: 2026, month: 1, day: day, steps: 8000))
+        }
+        for day in 1...28 {
+            summaries.append(makeSummary(year: 2026, month: 2, day: day, steps: 10000))
+        }
+
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 2, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        let stepTrend = report.trends[.stepCount]
+        // This month (Feb): 28 * 10000 = 280000
+        #expect(stepTrend?.thisMonth == 280000.0)
+        // Last month (Jan): 31 * 8000 = 248000
+        #expect(stepTrend?.lastMonth == 248000.0)
+    }
+
+    @Test func computeTrends_skipsWorkoutMetric() {
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 15, steps: 10000),
+        ]
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        #expect(report.trends[.workout] == nil)
+    }
+
+    @Test func computeTrends_allMetricsNil() {
+        // Summary with no metric data
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 15),
+        ]
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        #expect(report.trends[.stepCount]?.dayValue == nil)
+        #expect(report.trends[.heartRate]?.dayValue == nil)
+        #expect(report.trends[.stepCount]?.dayOfWeekMedian == nil)
+    }
+
+    @Test func computeTrends_handlesIntMetrics() {
+        let summaries = [
+            makeSummary(year: 2026, month: 1, day: 15, steps: 8500, standHoursCount: 12),
+        ]
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: summaries)
+
+        // Int values converted to Double
+        #expect(report.trends[.stepCount]?.dayValue == 8500.0)
+        #expect(report.trends[.appleStandHour]?.dayValue == 12.0)
+    }
+
+    @Test func computeTrends_reportDateMatchesInput() {
+        let date = Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 15))!
+        let report = TrendCalculator.computeTrends(for: date, from: [])
+
+        let expected = DateHelpers.startOfDay(for: date)
+        #expect(report.date == expected)
     }
 }

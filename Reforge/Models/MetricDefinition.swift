@@ -373,6 +373,94 @@ extension MetricDefinition {
     }
 }
 
+// MARK: - DailySummary KeyPath Mapping
+
+enum MetricKeyPath {
+    case double(KeyPath<DailySummary, Double?>)
+    case int(KeyPath<DailySummary, Int?>)
+}
+
+extension MetricDefinition {
+
+    /// Maps each metric to its primary `DailySummary` keypath.
+    /// Returns `nil` for `.workout` (stored in a separate model).
+    /// For `.avgMinMax`/`.avgMin` metrics, returns the avg keypath.
+    var dailySummaryKeyPath: MetricKeyPath? {
+        switch self {
+        // Activity — Int?
+        case .stepCount: .int(\.steps)
+        case .flightsClimbed: .int(\.flightsClimbed)
+        case .swimmingStrokeCount: .int(\.swimmingStrokeCount)
+
+        // Activity — Double?
+        case .distanceWalkingRunning: .double(\.distanceWalkingRunning)
+        case .distanceCycling: .double(\.distanceCycling)
+        case .distanceSwimming: .double(\.distanceSwimming)
+        case .basalEnergyBurned: .double(\.basalEnergyBurned)
+        case .activeEnergyBurned: .double(\.activeEnergyBurned)
+        case .appleExerciseTime: .double(\.appleExerciseTime)
+        case .appleMoveTime: .double(\.appleMoveTime)
+        case .appleStandTime: .double(\.appleStandTime)
+        case .physicalEffort: .double(\.physicalEffort)
+        case .vo2Max: .double(\.vo2Max)
+
+        // Running
+        case .runningSpeed: .double(\.runningSpeed)
+        case .runningPower: .double(\.runningPower)
+        case .runningStrideLength: .double(\.runningStrideLength)
+        case .runningVerticalOscillation: .double(\.runningVerticalOscillation)
+        case .runningGroundContactTime: .double(\.runningGroundContactTime)
+
+        // Cycling
+        case .cyclingSpeed: .double(\.cyclingSpeed)
+        case .cyclingPower: .double(\.cyclingPower)
+        case .cyclingFunctionalThresholdPower: .double(\.cyclingFTP)
+        case .cyclingCadence: .double(\.cyclingCadence)
+
+        // Heart — avgMinMax uses avg keypath
+        case .heartRate: .double(\.heartRateAvg)
+        case .restingHeartRate: .double(\.restingHeartRate)
+        case .walkingHeartRateAverage: .double(\.walkingHeartRateAvg)
+        case .heartRateVariabilitySDNN: .double(\.hrv)
+        case .heartRateRecoveryOneMinute: .double(\.heartRateRecovery)
+        case .atrialFibrillationBurden: .double(\.atrialFibrillationBurden)
+        case .peripheralPerfusionIndex: .double(\.peripheralPerfusionIndex)
+
+        // Respiratory — avgMinMax/avgMin use avg keypath
+        case .respiratoryRate: .double(\.respiratoryRateAvg)
+        case .oxygenSaturation: .double(\.oxygenSaturationAvg)
+
+        // Body
+        case .height: .double(\.height)
+        case .bodyMass: .double(\.bodyMass)
+        case .bodyMassIndex: .double(\.bmi)
+        case .appleSleepingWristTemperature: .double(\.sleepingWristTempAvg)
+
+        // Mobility
+        case .walkingSpeed: .double(\.walkingSpeed)
+        case .walkingStepLength: .double(\.walkingStepLength)
+        case .walkingAsymmetryPercentage: .double(\.walkingAsymmetry)
+        case .walkingDoubleSupportPercentage: .double(\.walkingDoubleSupport)
+        case .stairAscentSpeed: .double(\.stairAscentSpeed)
+        case .stairDescentSpeed: .double(\.stairDescentSpeed)
+        case .sixMinuteWalkTestDistance: .double(\.sixMinWalkDistance)
+
+        // Sleep & Mindfulness
+        case .sleepAnalysis: .double(\.sleepTotalHours)
+        case .appleStandHour: .int(\.standHoursCount)
+        case .mindfulSession: .double(\.mindfulMinutes)
+
+        // Heart Events — Int?
+        case .highHeartRateEvent: .int(\.highHeartRateEvents)
+        case .lowHeartRateEvent: .int(\.lowHeartRateEvents)
+        case .irregularHeartRhythmEvent: .int(\.irregularRhythmEvents)
+
+        // Workout — separate model, no simple keypath
+        case .workout: nil
+        }
+    }
+}
+
 // MARK: - HealthKit Identifiers
 
 extension MetricDefinition {
