@@ -28,17 +28,11 @@ struct DebugDataView: View {
             case .claudeData:
                 AggregatedDataView()
             case .stats:
-                placeholderView("Stats coming in Step 9.3")
+                DataStatsView()
             }
         }
         .navigationTitle("Debug Data")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func placeholderView(_ text: String) -> some View {
-        Text(text)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -50,5 +44,6 @@ struct DebugDataView: View {
         DailySummary.self,
         WorkoutSummary.self,
         UserProfile.self,
+        HealthInsight.self,
     ], inMemory: true)
 }
