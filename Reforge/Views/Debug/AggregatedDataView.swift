@@ -49,6 +49,10 @@ struct AggregatedDataView: View {
         return formatter.string(from: selectedDate)
     }
 
+    private var trendReport: TrendReport {
+        TrendCalculator.computeTrends(for: selectedDate, from: dailySummaries)
+    }
+
     private var payload: ClaudeDataPayload? {
         guard let profile, let summary = selectedSummary else { return nil }
         return ClaudeDataPayload.build(
@@ -56,7 +60,8 @@ struct AggregatedDataView: View {
             profile: profile,
             summary: summary,
             workouts: selectedWorkouts,
-            unitPref: unitPref
+            unitPref: unitPref,
+            trendReport: trendReport
         )
     }
 
@@ -226,7 +231,7 @@ struct AggregatedDataView: View {
 
     private var trendsNoteSection: some View {
         Section("Trends") {
-            Text("Trend comparisons will be available after TrendCalculator is implemented (Phase 10). All trend values currently show \"—\".")
+            Text("DoW = day-of-week median, Wk = this week, LWk = last week, WkM = week median, Mo = this month, LMo = last month, MoM = month median. \"—\" means no data available for that trend dimension.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
