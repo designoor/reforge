@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import UserNotifications
 
 struct ProfileView: View {
     @Query private var profiles: [UserProfile]
@@ -20,7 +19,7 @@ struct ProfileView: View {
 
     // MARK: - Display State
 
-    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var isNotificationsEnabled = false
     @State private var fullAPIKey: String?
     @State private var maskedAPIKey: String = "Not set"
     @State private var isAPIKeyRevealed = false
@@ -210,8 +209,7 @@ struct ProfileView: View {
             HStack {
                 Text("Notifications")
                 Spacer()
-                switch notificationStatus {
-                case .authorized, .provisional:
+                if isNotificationsEnabled {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(.green)
@@ -219,7 +217,7 @@ struct ProfileView: View {
                             .foregroundStyle(.secondary)
                     }
                     .font(.subheadline)
-                default:
+                } else {
                     HStack(spacing: 8) {
                         Text("Disabled")
                             .foregroundStyle(.secondary)
@@ -310,8 +308,7 @@ struct ProfileView: View {
 
     private func loadNotificationStatus() {
         Task {
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            notificationStatus = settings.authorizationStatus
+            isNotificationsEnabled = await NotificationManager.isPermissionGranted()
         }
     }
 
