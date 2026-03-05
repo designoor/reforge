@@ -35,12 +35,14 @@ enum NotificationManager {
         title: String,
         body: String,
         at dateComponents: DateComponents,
-        repeats: Bool
+        repeats: Bool,
+        userInfo: [String: String] = [:]
     ) async throws {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        content.userInfo = userInfo
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: repeats)
         let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)

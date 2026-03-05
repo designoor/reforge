@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum PendingAction {
+    case logWeight
+}
+
 @Observable
 final class AppState {
     private static let onboardingKey = "isOnboardingComplete"
@@ -14,6 +18,7 @@ final class AppState {
     }
 
     var isSyncing: Bool = false
+    var pendingAction: PendingAction?
 
     init() {
         self.isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
