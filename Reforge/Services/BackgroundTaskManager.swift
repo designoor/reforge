@@ -56,9 +56,42 @@ enum BackgroundTaskManager {
     // MARK: - Task Handling
 
     /// Handles the daily collection background task.
-    /// TODO: Step 11.3 — Replace stub with real data collection logic.
     private static func handleDailyCollection(task: BGProcessingTask, container: ModelContainer) {
-        scheduleNextCollection()
-        task.setTaskCompleted(success: true)
+        let workTask = Task {
+            let context = ModelContext(container)
+
+            // Determine user's timezone for computing "yesterday"
+            let userTimeZone: TimeZone
+            if let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
+               let tz = TimeZone(identifier: profile.timeZone) {
+                userTimeZone = tz
+            } else {
+                userTimeZone = .current
+            }
+
+            var calendar = Calendar.current
+            calendar.timeZone = userTimeZone
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: Date()))!
+
+            _ = try await DailyDataService.collectData(for: yesterday, context: context)
+            _ = try await DailyDataService.collectMissedDays(context: context)
+        }
+
+        task.expirationHandler = {
+            workTask.cancel()
+        }
+
+        Task {
+            let success: Bool
+            do {
+                try await workTask.value
+                success = true
+            } catch {
+                print("BackgroundTaskManager: Daily collection failed: \(error)")
+                success = false
+            }
+            scheduleNextCollection()
+            task.setTaskCompleted(success: success)
+        }
     }
 }
