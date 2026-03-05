@@ -418,6 +418,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Reforge;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reforge reads your health data to provide personalized AI-powered health insights and recommendations.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Reforge saves your manually logged weight to Apple Health so it stays in sync across all your health apps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -460,6 +461,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Reforge;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Reforge reads your health data to provide personalized AI-powered health insights and recommendations.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Reforge saves your manually logged weight to Apple Health so it stays in sync across all your health apps.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

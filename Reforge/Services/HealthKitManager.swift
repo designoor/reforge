@@ -16,7 +16,24 @@ enum HealthKitManager {
         let readTypes: Set<HKObjectType> = Set(
             MetricDefinition.allSampleTypes.compactMap { $0 as? HKObjectType }
         )
-        try await healthStore.requestAuthorization(toShare: [], read: readTypes)
+        let shareTypes: Set<HKSampleType> = [
+            HKQuantityType(.bodyMass)
+        ]
+        try await healthStore.requestAuthorization(toShare: shareTypes, read: readTypes)
+    }
+
+    // MARK: - Write
+
+    static func saveWeight(_ kg: Double, date: Date) async throws {
+        let quantityType = HKQuantityType(.bodyMass)
+        let quantity = HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: kg)
+        let sample = HKQuantitySample(
+            type: quantityType,
+            quantity: quantity,
+            start: date,
+            end: date
+        )
+        try await healthStore.save(sample)
     }
 
     static func getDateOfBirth() throws -> Date? {
