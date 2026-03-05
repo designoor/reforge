@@ -1,5 +1,4 @@
 import SwiftUI
-import UserNotifications
 
 struct NotificationPermissionView: View {
     @Binding var canAdvance: Bool
@@ -155,9 +154,7 @@ struct NotificationPermissionView: View {
 
     private func checkCurrentStatus() {
         Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-            if settings.authorizationStatus == .authorized {
+            if await NotificationManager.isPermissionGranted() {
                 permissionStatus = .granted
                 canAdvance = true
             }
@@ -167,13 +164,8 @@ struct NotificationPermissionView: View {
     private func requestAuthorization() {
         isRequesting = true
         Task {
-            let center = UNUserNotificationCenter.current()
-            do {
-                let granted = try await center.requestAuthorization(options: [.alert, .badge, .sound])
-                permissionStatus = granted ? .granted : .denied
-            } catch {
-                permissionStatus = .denied
-            }
+            let granted = await NotificationManager.requestPermission()
+            permissionStatus = granted ? .granted : .denied
             isRequesting = false
             canAdvance = true
         }
