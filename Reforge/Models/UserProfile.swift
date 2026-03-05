@@ -37,6 +37,11 @@ final class UserProfile {
     var createdAt: Date
     var updatedAt: Date
 
+    // MARK: - Notification Preferences
+    var dailyCollectionNotification: Bool
+    var weightReminderEnabled: Bool
+    var weightReminderTime: Date
+
     init(
         dateOfBirth: Date = Date(),
         biologicalSex: String = "other",
@@ -51,7 +56,15 @@ final class UserProfile {
             return Calendar.current.date(from: components) ?? Date()
         }(),
         createdAt: Date = Date(),
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        dailyCollectionNotification: Bool = false,
+        weightReminderEnabled: Bool = false,
+        weightReminderTime: Date = {
+            var components = DateComponents()
+            components.hour = 8
+            components.minute = 0
+            return Calendar.current.date(from: components) ?? Date()
+        }()
     ) {
         self.dateOfBirth = dateOfBirth
         self.biologicalSex = biologicalSex
@@ -62,5 +75,8 @@ final class UserProfile {
         self.wakeTime = wakeTime
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.dailyCollectionNotification = dailyCollectionNotification
+        self.weightReminderEnabled = weightReminderEnabled
+        self.weightReminderTime = weightReminderTime
     }
 }
