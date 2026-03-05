@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var showDatePicker = false
     @State private var swipeOffset: CGFloat = 0
     @State private var showManualInputSheet = false
+    @State private var showWeightEntrySheet = false
 
     private var selectedSummary: DailySummary? {
         let normalized = DateHelpers.startOfDay(for: selectedDate)
@@ -31,6 +32,12 @@ struct DashboardView: View {
 
     private var unitPref: UnitPreference {
         UnitPreference(rawValue: profiles.first?.unitPreference ?? "metric") ?? .metric
+    }
+
+    private var mostRecentWeightKg: Double {
+        if let w = selectedSummary?.bodyMass { return w }
+        if let w = dailySummaries.last(where: { $0.bodyMass != nil })?.bodyMass { return w }
+        return profiles.first?.weight ?? 70.0
     }
 
     private var earliestDate: Date? {
@@ -128,13 +135,22 @@ struct DashboardView: View {
             }
             .confirmationDialog("Log Data", isPresented: $showManualInputSheet) {
                 Button {
-                    // TODO: Step 12.4 will present weight entry sheet
+                    showWeightEntrySheet = true
                 } label: {
                     Label("Log Weight", systemImage: "scalemass")
                 }
             }
             .sheet(isPresented: $showDatePicker) {
                 datePickerSheet
+            }
+            .sheet(isPresented: $showWeightEntrySheet) {
+                LogWeightSheet(
+                    initialDate: selectedDate,
+                    unitPreference: unitPref,
+                    initialWeightKg: mostRecentWeightKg,
+                    dailySummaries: dailySummaries,
+                    profile: profiles.first
+                )
             }
         }
     }
