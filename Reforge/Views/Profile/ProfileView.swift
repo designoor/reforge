@@ -204,33 +204,53 @@ struct ProfileView: View {
         }
     }
 
+    private let weightReminderNotificationID = "weightReminder"
+
     private var notificationsSection: some View {
-        Section("Notifications") {
-            HStack {
-                Text("Notifications")
-                Spacer()
-                if isNotificationsEnabled {
-                    HStack(spacing: 4) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Enabled")
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.subheadline)
-                } else {
-                    HStack(spacing: 8) {
-                        Text("Disabled")
-                            .foregroundStyle(.secondary)
-                            .font(.subheadline)
-                        Button("Enable") {
-                            if let url = URL(string: UIApplication.openSettingsURLString) {
-                                openURL(url)
-                            }
+        Group {
+            Section("Notifications — System") {
+                HStack {
+                    Text("Permission")
+                    Spacer()
+                    if isNotificationsEnabled {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            Text("Enabled")
+                                .foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .font(.subheadline)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text("Disabled")
+                                .foregroundStyle(.secondary)
+                                .font(.subheadline)
+                            Button("Enable in Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) {
+                                    openURL(url)
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
                     }
                 }
+            }
+
+            Section("Notifications — Reminders") {
+                Toggle("Weight Reminder", isOn: weightReminderBinding)
+
+                if profile?.weightReminderEnabled == true {
+                    DatePicker(
+                        "Reminder Time",
+                        selection: weightReminderTimeBinding,
+                        displayedComponents: .hourAndMinute
+                    )
+                }
+            }
+
+            Section("Notifications — Debug") {
+                Toggle("Data Collection Success", isOn: dailyCollectionNotificationBinding)
             }
         }
     }
@@ -297,6 +317,37 @@ struct ProfileView: View {
         )
     }
 
+    private var weightReminderBinding: Binding<Bool> {
+        Binding(
+            get: { profile?.weightReminderEnabled ?? false },
+            set: { newValue in
+                updateProfile { $0.weightReminderEnabled = newValue }
+                if newValue {
+                    scheduleWeightReminder()
+                } else {
+                    NotificationManager.cancelNotification(id: weightReminderNotificationID)
+                }
+            }
+        )
+    }
+
+    private var weightReminderTimeBinding: Binding<Date> {
+        Binding(
+            get: { profile?.weightReminderTime ?? Date() },
+            set: { newValue in
+                updateProfile { $0.weightReminderTime = newValue }
+                scheduleWeightReminder()
+            }
+        )
+    }
+
+    private var dailyCollectionNotificationBinding: Binding<Bool> {
+        Binding(
+            get: { profile?.dailyCollectionNotification ?? false },
+            set: { newValue in updateProfile { $0.dailyCollectionNotification = newValue } }
+        )
+    }
+
     // MARK: - Actions
 
     private func updateProfile(_ mutation: (UserProfile) -> Void) {
@@ -304,6 +355,21 @@ struct ProfileView: View {
         mutation(profile)
         profile.updatedAt = Date()
         try? modelContext.save()
+    }
+
+    private func scheduleWeightReminder() {
+        guard let profile else { return }
+        let components = Calendar.current.dateComponents([.hour, .minute], from: profile.weightReminderTime)
+        Task {
+            NotificationManager.cancelNotification(id: weightReminderNotificationID)
+            try? await NotificationManager.scheduleNotification(
+                id: weightReminderNotificationID,
+                title: "Log Your Weight",
+                body: "Take a moment to record today's weight.",
+                at: components,
+                repeats: true
+            )
+        }
     }
 
     private func loadNotificationStatus() {
