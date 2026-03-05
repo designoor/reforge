@@ -367,7 +367,8 @@ struct ProfileView: View {
                 title: "Log Your Weight",
                 body: "Take a moment to record today's weight.",
                 at: components,
-                repeats: true
+                repeats: true,
+                userInfo: ["action": "logWeight"]
             )
         }
     }

@@ -152,7 +152,19 @@ struct DashboardView: View {
                     profile: profiles.first
                 )
             }
+            .onAppear {
+                handlePendingAction()
+            }
+            .onChange(of: appState.pendingAction) {
+                handlePendingAction()
+            }
         }
+    }
+
+    private func handlePendingAction() {
+        guard appState.pendingAction == .logWeight else { return }
+        appState.pendingAction = nil
+        showWeightEntrySheet = true
     }
 
     private func navigateDay(by offset: Int) {

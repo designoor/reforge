@@ -1,10 +1,12 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct ReforgeApp: App {
     @State private var appState = AppState()
     @Environment(\.scenePhase) private var scenePhase
+    @State private var notificationDelegate: NotificationDelegate
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -24,6 +26,10 @@ struct ReforgeApp: App {
     }()
 
     init() {
+        let delegate = NotificationDelegate(appState: _appState.wrappedValue)
+        self.notificationDelegate = delegate
+        UNUserNotificationCenter.current().delegate = delegate
+
         BackgroundTaskManager.registerTask(container: sharedModelContainer)
     }
 
