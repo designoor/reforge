@@ -232,6 +232,7 @@ struct BackfillProgressView: View {
     }
 
     private func completeOnboarding() {
+        BackgroundTaskManager.scheduleNextCollection()
         appState.isOnboardingComplete = true
     }
 }
