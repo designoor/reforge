@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct DashboardView: View {
+    @Environment(AppState.self) private var appState
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \DailySummary.date) private var dailySummaries: [DailySummary]
     @Query private var healthInsights: [HealthInsight]
 
@@ -28,8 +30,8 @@ struct DashboardView: View {
     }
 
     private var canGoForward: Bool {
-        let yesterday = DateHelpers.yesterday()
-        return DateHelpers.startOfDay(for: selectedDate) < yesterday
+        let today = DateHelpers.startOfDay(for: Date())
+        return DateHelpers.startOfDay(for: selectedDate) < today
     }
 
     private var formattedDate: String {
@@ -59,8 +61,11 @@ struct DashboardView: View {
                 .padding(.bottom, 32)
             }
             .refreshable {
-                // Stub — will trigger data fetch + Claude call in a future phase
-                try? await Task.sleep(for: .milliseconds(500))
+                guard !appState.isSyncing else { return }
+                appState.isSyncing = true
+                defer { appState.isSyncing = false }
+                let context = ModelContext(modelContext.container)
+                _ = try? await DailyDataService.collectToday(context: context)
             }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.large)
@@ -86,7 +91,16 @@ struct DashboardView: View {
                 Text(formattedDate)
                     .font(.headline)
 
-                if selectedSummary != nil {
+                if appState.isSyncing {
+                    HStack(spacing: 4) {
+                        ProgressView()
+                            .controlSize(.mini)
+
+                        Text("Syncing health data…")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if selectedSummary != nil {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2)
@@ -213,5 +227,6 @@ struct DashboardView: View {
 
 #Preview {
     DashboardView()
+        .environment(AppState())
         .modelContainer(for: [DailySummary.self, HealthInsight.self], inMemory: true)
 }

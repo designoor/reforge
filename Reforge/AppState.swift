@@ -13,6 +13,8 @@ final class AppState {
         didSet { UserDefaults.standard.set(currentOnboardingStep, forKey: Self.onboardingStepKey) }
     }
 
+    var isSyncing: Bool = false
+
     init() {
         self.isOnboardingComplete = UserDefaults.standard.bool(forKey: Self.onboardingKey)
         self.currentOnboardingStep = UserDefaults.standard.integer(forKey: Self.onboardingStepKey)
