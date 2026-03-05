@@ -22,6 +22,10 @@ struct ReforgeApp: App {
         }
     }()
 
+    init() {
+        BackgroundTaskManager.registerTask(container: sharedModelContainer)
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
