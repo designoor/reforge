@@ -12,6 +12,7 @@ struct DashboardView: View {
     @State private var selectedDate: Date = DateHelpers.startOfDay(for: Date())
     @State private var showDatePicker = false
     @State private var swipeOffset: CGFloat = 0
+    @State private var showManualInputSheet = false
 
     private var selectedSummary: DailySummary? {
         let normalized = DateHelpers.startOfDay(for: selectedDate)
@@ -116,6 +117,22 @@ struct DashboardView: View {
             }
             .navigationTitle("Today")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showManualInputSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .confirmationDialog("Log Data", isPresented: $showManualInputSheet) {
+                Button {
+                    // TODO: Step 12.4 will present weight entry sheet
+                } label: {
+                    Label("Log Weight", systemImage: "scalemass")
+                }
+            }
             .sheet(isPresented: $showDatePicker) {
                 datePickerSheet
             }
