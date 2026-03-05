@@ -7,7 +7,7 @@ struct DashboardView: View {
     @Query(sort: \DailySummary.date) private var dailySummaries: [DailySummary]
     @Query private var healthInsights: [HealthInsight]
 
-    @State private var selectedDate: Date = DateHelpers.yesterday()
+    @State private var selectedDate: Date = DateHelpers.startOfDay(for: Date())
     @State private var isDataSummaryExpanded = false
     @State private var showDatePicker = false
     @State private var swipeOffset: CGFloat = 0
@@ -32,8 +32,8 @@ struct DashboardView: View {
     }
 
     private var canGoForward: Bool {
-        let yesterday = DateHelpers.yesterday()
-        return DateHelpers.startOfDay(for: selectedDate) < DateHelpers.startOfDay(for: yesterday)
+        let today = DateHelpers.startOfDay(for: Date())
+        return DateHelpers.startOfDay(for: selectedDate) < today
     }
 
     private var formattedDate: String {
@@ -47,8 +47,8 @@ struct DashboardView: View {
     }
 
     private var datePickerRange: ClosedRange<Date> {
-        let earliest = earliestDate ?? DateHelpers.yesterday()
-        return DateHelpers.startOfDay(for: earliest)...DateHelpers.yesterday()
+        let earliest = earliestDate ?? DateHelpers.startOfDay(for: Date())
+        return DateHelpers.startOfDay(for: earliest)...DateHelpers.startOfDay(for: Date())
     }
 
     var body: some View {
@@ -323,8 +323,8 @@ struct DashboardView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Yesterday") {
-                        selectedDate = DateHelpers.yesterday()
+                    Button("Today") {
+                        selectedDate = DateHelpers.startOfDay(for: Date())
                         showDatePicker = false
                     }
                 }
