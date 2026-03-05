@@ -32,6 +32,32 @@ enum DailyDataService {
         return summary
     }
 
+    // MARK: - Collect Today
+
+    /// Collects today's health data, always re-querying HealthKit.
+    /// Deletes any existing DailySummary and WorkoutSummary for today before re-collecting.
+    static func collectToday(context: ModelContext) async throws -> DailySummary {
+        let today = DateHelpers.startOfDay(for: Date())
+
+        let summaryDescriptor = FetchDescriptor<DailySummary>(
+            predicate: #Predicate<DailySummary> { $0.date == today }
+        )
+        if let existing = try context.fetch(summaryDescriptor).first {
+            context.delete(existing)
+        }
+
+        let workoutDescriptor = FetchDescriptor<WorkoutSummary>(
+            predicate: #Predicate<WorkoutSummary> { $0.date == today }
+        )
+        for workout in try context.fetch(workoutDescriptor) {
+            context.delete(workout)
+        }
+
+        try context.save()
+
+        return try await collectData(for: today, context: context)
+    }
+
     // MARK: - Needs Collection
 
     /// Returns true if no DailySummary exists for the given date.

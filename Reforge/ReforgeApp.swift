@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct ReforgeApp: App {
     @State private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -32,5 +33,30 @@ struct ReforgeApp: App {
                 .environment(appState)
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active && appState.isOnboardingComplete {
+                performForegroundSync()
+            }
+        }
+    }
+
+    private func performForegroundSync() {
+        guard !appState.isSyncing else { return }
+        let container = sharedModelContainer
+        appState.isSyncing = true
+        Task {
+            defer {
+                Task { @MainActor in
+                    appState.isSyncing = false
+                }
+            }
+            let context = ModelContext(container)
+            let yesterday = DateHelpers.yesterday()
+            guard DailyDataService.needsCollection(for: yesterday, context: context) else {
+                return
+            }
+            _ = try? await DailyDataService.collectData(for: yesterday, context: context)
+            _ = try? await DailyDataService.collectMissedDays(context: context)
+        }
     }
 }
