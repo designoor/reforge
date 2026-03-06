@@ -2,6 +2,10 @@ import UserNotifications
 
 enum NotificationManager {
 
+    // MARK: - Notification IDs
+
+    static let weightReminderID = "weightReminder"
+
     // MARK: - Permissions
 
     /// Requests notification authorization from the user.
@@ -84,5 +88,45 @@ enum NotificationManager {
     /// Returns all currently pending notification requests.
     static func getPendingNotifications() async -> [UNNotificationRequest] {
         await UNUserNotificationCenter.current().pendingNotificationRequests()
+    }
+
+    // MARK: - Notification Scheduling
+
+    /// Schedules the daily weight reminder notification at the given time
+    /// in the specified timezone. Cancels any existing weight reminder first.
+    static func scheduleWeightReminder(time: Date, timeZone: TimeZone) async {
+        cancelNotification(id: weightReminderID)
+
+        var calendar = Calendar.current
+        calendar.timeZone = timeZone
+        var components = calendar.dateComponents([.hour, .minute], from: time)
+        components.timeZone = timeZone
+
+        try? await scheduleNotification(
+            id: weightReminderID,
+            title: "Log Your Weight",
+            body: "Take a moment to record today's weight.",
+            at: components,
+            repeats: true,
+            userInfo: ["action": "logWeight"]
+        )
+    }
+
+    /// Re-evaluates and reschedules all time-based notifications.
+    /// Called when the user changes their timezone, wake time, or notification preferences.
+    static func rescheduleAll(
+        weightReminderEnabled: Bool,
+        weightReminderTime: Date,
+        wakeTime: Date,
+        timeZone: TimeZone
+    ) async {
+        if weightReminderEnabled {
+            await scheduleWeightReminder(time: weightReminderTime, timeZone: timeZone)
+        } else {
+            cancelNotification(id: weightReminderID)
+        }
+
+        // Future: Claude insights notification could use wakeTime
+        // to determine optimal delivery time.
     }
 }
