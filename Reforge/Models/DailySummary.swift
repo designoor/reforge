@@ -97,6 +97,35 @@ final class DailySummary {
     var lowHeartRateEvents: Int?
     var irregularRhythmEvents: Int?
 
+    // MARK: - Computed
+
+    /// Number of metric properties that have non-nil values.
+    var recordedMetricCount: Int {
+        let metrics: [Any?] = [
+            steps, distanceWalkingRunning, distanceCycling, distanceSwimming,
+            basalEnergyBurned, activeEnergyBurned, flightsClimbed,
+            appleExerciseTime, appleMoveTime, appleStandTime,
+            swimmingStrokeCount, physicalEffort, vo2Max,
+            runningSpeed, runningPower, runningStrideLength,
+            runningVerticalOscillation, runningGroundContactTime,
+            cyclingSpeed, cyclingPower, cyclingFTP, cyclingCadence,
+            heartRateAvg, heartRateMin, heartRateMax, restingHeartRate,
+            walkingHeartRateAvg, hrv, heartRateRecovery,
+            atrialFibrillationBurden, peripheralPerfusionIndex,
+            respiratoryRateAvg, respiratoryRateMin, respiratoryRateMax,
+            oxygenSaturationAvg, oxygenSaturationMin,
+            height, bodyMass, bmi,
+            sleepingWristTempAvg, sleepingWristTempMin, sleepingWristTempMax,
+            walkingSpeed, walkingStepLength, walkingAsymmetry,
+            walkingDoubleSupport, stairAscentSpeed, stairDescentSpeed, sixMinWalkDistance,
+            sleepTotalHours, sleepInBedHours, sleepAwakeHours,
+            sleepCoreHours, sleepDeepHours, sleepREMHours,
+            standHoursCount, mindfulMinutes, highHeartRateEvents,
+            lowHeartRateEvents, irregularRhythmEvents,
+        ]
+        return metrics.compactMap { $0 }.count
+    }
+
     // MARK: - Metadata
 
     var createdAt: Date

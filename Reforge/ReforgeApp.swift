@@ -61,8 +61,24 @@ struct ReforgeApp: App {
             guard DailyDataService.needsCollection(for: yesterday, context: context) else {
                 return
             }
-            _ = try? await DailyDataService.collectData(for: yesterday, context: context)
-            _ = try? await DailyDataService.collectMissedDays(context: context)
+            let summary = try? await DailyDataService.collectData(for: yesterday, context: context)
+            let missedCount = try? await DailyDataService.collectMissedDays(context: context)
+
+            if let summary,
+               let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
+               profile.dailyCollectionNotification {
+                let dateString = yesterday.formatted(date: .abbreviated, time: .omitted)
+                let metricCount = summary.recordedMetricCount
+                var body = "Successfully collected health data for \(dateString). \(metricCount) metrics recorded."
+                if let missedCount, missedCount > 0 {
+                    body += " Also backfilled \(missedCount) missed day\(missedCount == 1 ? "" : "s")."
+                }
+                try? await NotificationManager.sendImmediate(
+                    id: "debug.collection.\(yesterday.timeIntervalSince1970)",
+                    title: "Data Collection Complete",
+                    body: body
+                )
+            }
         }
     }
 }
