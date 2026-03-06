@@ -50,6 +50,23 @@ enum NotificationManager {
         try await UNUserNotificationCenter.current().add(request)
     }
 
+    /// Sends a local notification immediately (fires within ~1 second).
+    static func sendImmediate(
+        id: String,
+        title: String,
+        body: String
+    ) async throws {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        let request = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+
+        try await UNUserNotificationCenter.current().add(request)
+    }
+
     // MARK: - Cancellation
 
     /// Cancels a specific pending notification by its identifier.

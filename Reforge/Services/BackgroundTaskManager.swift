@@ -60,10 +60,11 @@ enum BackgroundTaskManager {
         let workTask = Task {
             let context = ModelContext(container)
 
+            let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first
+
             // Determine user's timezone for computing "yesterday"
             let userTimeZone: TimeZone
-            if let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first,
-               let tz = TimeZone(identifier: profile.timeZone) {
+            if let profile, let tz = TimeZone(identifier: profile.timeZone) {
                 userTimeZone = tz
             } else {
                 userTimeZone = .current
@@ -73,8 +74,22 @@ enum BackgroundTaskManager {
             calendar.timeZone = userTimeZone
             let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: Date()))!
 
-            _ = try await DailyDataService.collectData(for: yesterday, context: context)
-            _ = try await DailyDataService.collectMissedDays(context: context)
+            let summary = try await DailyDataService.collectData(for: yesterday, context: context)
+            let missedCount = try await DailyDataService.collectMissedDays(context: context)
+
+            if profile?.dailyCollectionNotification == true {
+                let dateString = yesterday.formatted(date: .abbreviated, time: .omitted)
+                let metricCount = summary.recordedMetricCount
+                var body = "Successfully collected health data for \(dateString). \(metricCount) metrics recorded."
+                if missedCount > 0 {
+                    body += " Also backfilled \(missedCount) missed day\(missedCount == 1 ? "" : "s")."
+                }
+                try? await NotificationManager.sendImmediate(
+                    id: "debug.collection.\(yesterday.timeIntervalSince1970)",
+                    title: "Data Collection Complete",
+                    body: body
+                )
+            }
         }
 
         task.expirationHandler = {
