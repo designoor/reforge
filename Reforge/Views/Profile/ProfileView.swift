@@ -92,7 +92,10 @@ struct ProfileView: View {
             .sheet(isPresented: $showTimeZonePicker) {
                 EditTimeZoneSheet(
                     currentTimeZone: profile?.timeZone ?? TimeZone.current.identifier,
-                    onSave: { tz in updateProfile { $0.timeZone = tz } }
+                    onSave: { tz in
+                        updateProfile { $0.timeZone = tz }
+                        triggerRescheduleAll()
+                    }
                 )
             }
             .sheet(isPresented: $showWakeTimePicker) {
@@ -204,8 +207,6 @@ struct ProfileView: View {
         }
     }
 
-    private let weightReminderNotificationID = "weightReminder"
-
     private var notificationsSection: some View {
         Group {
             Section("Notifications — System") {
@@ -313,7 +314,10 @@ struct ProfileView: View {
     private var wakeTimeBinding: Binding<Date> {
         Binding(
             get: { profile?.wakeTime ?? Date() },
-            set: { newValue in updateProfile { $0.wakeTime = newValue } }
+            set: { newValue in
+                updateProfile { $0.wakeTime = newValue }
+                triggerRescheduleAll()
+            }
         )
     }
 
@@ -322,11 +326,7 @@ struct ProfileView: View {
             get: { profile?.weightReminderEnabled ?? false },
             set: { newValue in
                 updateProfile { $0.weightReminderEnabled = newValue }
-                if newValue {
-                    scheduleWeightReminder()
-                } else {
-                    NotificationManager.cancelNotification(id: weightReminderNotificationID)
-                }
+                triggerRescheduleAll()
             }
         )
     }
@@ -336,7 +336,7 @@ struct ProfileView: View {
             get: { profile?.weightReminderTime ?? Date() },
             set: { newValue in
                 updateProfile { $0.weightReminderTime = newValue }
-                scheduleWeightReminder()
+                triggerRescheduleAll()
             }
         )
     }
@@ -357,18 +357,15 @@ struct ProfileView: View {
         try? modelContext.save()
     }
 
-    private func scheduleWeightReminder() {
+    private func triggerRescheduleAll() {
         guard let profile else { return }
-        let components = Calendar.current.dateComponents([.hour, .minute], from: profile.weightReminderTime)
+        let timeZone = TimeZone(identifier: profile.timeZone) ?? .current
         Task {
-            NotificationManager.cancelNotification(id: weightReminderNotificationID)
-            try? await NotificationManager.scheduleNotification(
-                id: weightReminderNotificationID,
-                title: "Log Your Weight",
-                body: "Take a moment to record today's weight.",
-                at: components,
-                repeats: true,
-                userInfo: ["action": "logWeight"]
+            await NotificationManager.rescheduleAll(
+                weightReminderEnabled: profile.weightReminderEnabled,
+                weightReminderTime: profile.weightReminderTime,
+                wakeTime: profile.wakeTime,
+                timeZone: timeZone
             )
         }
     }

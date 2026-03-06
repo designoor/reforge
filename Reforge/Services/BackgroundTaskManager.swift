@@ -57,7 +57,7 @@ enum BackgroundTaskManager {
 
     /// Handles the daily collection background task.
     private static func handleDailyCollection(task: BGProcessingTask, container: ModelContainer) {
-        let workTask = Task {
+        let workTask = Task { () -> TimeZone in
             let context = ModelContext(container)
 
             let profile = try? context.fetch(FetchDescriptor<UserProfile>()).first
@@ -90,6 +90,8 @@ enum BackgroundTaskManager {
                     body: body
                 )
             }
+
+            return userTimeZone
         }
 
         task.expirationHandler = {
@@ -97,15 +99,17 @@ enum BackgroundTaskManager {
         }
 
         Task {
+            let resolvedTimeZone: TimeZone
             let success: Bool
             do {
-                try await workTask.value
+                resolvedTimeZone = try await workTask.value
                 success = true
             } catch {
                 print("BackgroundTaskManager: Daily collection failed: \(error)")
+                resolvedTimeZone = .current
                 success = false
             }
-            scheduleNextCollection()
+            scheduleNextCollection(timeZone: resolvedTimeZone)
             task.setTaskCompleted(success: success)
         }
     }
