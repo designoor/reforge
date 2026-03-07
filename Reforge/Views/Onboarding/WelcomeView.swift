@@ -11,15 +11,19 @@ struct WelcomeView: View {
                 .font(.system(size: 80))
                 .foregroundStyle(Color.accentColor)
 
-            Text("Your AI Health Coach")
-                .font(.largeTitle.bold())
-                .multilineTextAlignment(.center)
+            VStack(spacing: 4) {
+                Text("Reforge")
+                    .font(.largeTitle.bold())
+                Text("Your personalised AI coach")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
+            .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: 16) {
                 featureRow(icon: "applewatch", text: "Reads your Apple Health data")
                 featureRow(icon: "chart.line.uptrend.xyaxis", text: "Analyzes trends and patterns with AI")
                 featureRow(icon: "lightbulb", text: "Provides daily personalized suggestions")
-                featureRow(icon: "lock.shield", text: "All data stays on your device")
             }
             .padding(.horizontal, 24)
 

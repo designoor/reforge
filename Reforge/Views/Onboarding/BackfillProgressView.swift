@@ -48,7 +48,7 @@ struct BackfillProgressView: View {
                     .font(.system(size: 60))
                     .foregroundStyle(.green)
             case .noData:
-                Image(systemName: "tray")
+                Image(systemName: "gearshape.2")
                     .font(.system(size: 60))
                     .foregroundStyle(Color.accentColor)
             case .error:
@@ -89,9 +89,9 @@ struct BackfillProgressView: View {
                     .multilineTextAlignment(.center)
 
             case .noData:
-                Text("No Historical Data")
+                Text("Setting Up")
                     .font(.largeTitle.bold())
-                Text("No historical data found. We'll start collecting from today.")
+                Text("We're getting everything ready. Your first health insights will arrive tomorrow.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

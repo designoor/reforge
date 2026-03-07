@@ -1,14 +1,14 @@
-# HealthCoach — Implementation Plan
+# Reforge — Implementation Plan
 
 ## What We're Building
 
-HealthCoach is an iOS app that acts as a personal AI health coach. It reads the user's health and fitness data from Apple HealthKit, aggregates it into meaningful daily summaries, and sends those summaries to the Anthropic Claude API for personalized analysis and actionable health suggestions.
+Reforge is an iOS app that acts as a personal AI health coach. It reads the user's health and fitness data from Apple HealthKit, aggregates it into meaningful daily summaries, and sends those summaries to the Anthropic Claude API for personalized analysis and actionable health suggestions.
 
 The app collects 49 HealthKit metrics across activity, heart, respiratory, body, mobility, sleep, and workout categories. Each day it queries HealthKit for the previous day's data, aggregates it into a `DailySummary`, stores it locally in SwiftData, and computes trend comparisons (day-of-week medians, weekly totals, monthly totals) from the historical store.
 
 ## Why
 
-Health data is abundant but overwhelming. Apple Watch and iPhone collect dozens of metrics daily — steps, heart rate, sleep stages, HRV, VO2 max, and more — but most people never look at it beyond glancing at their rings. HealthCoach bridges the gap between raw data and actionable insight by using Claude to interpret patterns, spot anomalies, and provide personalized recommendations grounded in the user's actual data and trends.
+Health data is abundant but overwhelming. Apple Watch and iPhone collect dozens of metrics daily — steps, heart rate, sleep stages, HRV, VO2 max, and more — but most people never look at it beyond glancing at their rings. Reforge bridges the gap between raw data and actionable insight by using Claude to interpret patterns, spot anomalies, and provide personalized recommendations grounded in the user's actual data and trends.
 
 ## How It Works
 
@@ -196,9 +196,9 @@ Screen 7: Backfill → progress screen while importing historical HealthKit data
 ## Project Structure
 
 ```
-HealthCoach/
+Reforge/
 ├── App/
-│   ├── HealthCoachApp.swift                 // Entry point, SwiftData container, tab routing
+│   ├── ReforgeApp.swift                 // Entry point, SwiftData container, tab routing
 │   └── AppState.swift                       // Global app state (onboarding complete, etc.)
 ├── Models/
 │   ├── UserProfile.swift                    // DOB, sex, height, weight, units, wake time, timezone
@@ -512,7 +512,7 @@ This phase ensures that HealthKit data is collected and stored every day without
 
 `BackgroundTaskManager.swift` — manages `BGProcessingTask` scheduling.
 
-- Register the background task identifier in `HealthCoachApp.swift` on launch:
+- Register the background task identifier in `ReforgeApp.swift` on launch:
   - Identifier: `com.healthcoach.dailyCollection`
   - Register via `BGTaskScheduler.shared.register(forTaskWithIdentifier:using:launchHandler:)`.
 - Add the identifier to `Info.plist` under `BGTaskSchedulerPermittedIdentifiers`.
@@ -544,7 +544,7 @@ This phase ensures that HealthKit data is collected and stored every day without
 
 Since iOS doesn't guarantee background task execution, the app checks on every foreground entry.
 
-- In `HealthCoachApp.swift` or `AppState`, add a `scenePhase` handler:
+- In `ReforgeApp.swift` or `AppState`, add a `scenePhase` handler:
   - When the app enters foreground and onboarding is complete:
     - Call `DailyDataService.needsCollection(for: yesterday)`.
     - If true, run `DailyDataService.collectData(for: yesterday)` in a background Swift Task.
@@ -693,7 +693,7 @@ This phase implements a flexible notification system where users can configure w
 - When the weight reminder notification fires and the user taps it, the app should open directly to the weight input view.
 - Implementation:
   - Set a `userInfo` dictionary on the notification with a key like `"action": "logWeight"`.
-  - In `HealthCoachApp.swift`, handle `UNUserNotificationCenterDelegate.userNotificationCenter(_:didReceive:)`.
+  - In `ReforgeApp.swift`, handle `UNUserNotificationCenterDelegate.userNotificationCenter(_:didReceive:)`.
   - When the response's `userInfo` contains `"action": "logWeight"`:
     - Set a flag in `AppState` (e.g., `pendingAction: .logWeight`).
     - The `DashboardView` observes this flag and presents the weight input sheet when it's set.

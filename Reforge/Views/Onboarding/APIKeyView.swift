@@ -53,7 +53,7 @@ struct APIKeyView: View {
             Text("API Key")
                 .font(.largeTitle.bold())
 
-            Text("HealthCoach uses Claude AI to analyze your health data. You'll need an Anthropic API key.")
+            Text("Reforge uses Claude AI to analyze your health data. You'll need an Anthropic API key.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
