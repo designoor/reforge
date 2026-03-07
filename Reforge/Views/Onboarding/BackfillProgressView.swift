@@ -189,7 +189,8 @@ struct BackfillProgressView: View {
                     return
                 }
 
-                let startDate = DateHelpers.startOfDay(for: earliestDate)
+                let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+                let startDate = max(DateHelpers.startOfDay(for: earliestDate), DateHelpers.startOfDay(for: thirtyDaysAgo))
                 let endDate = DateHelpers.yesterday()
 
                 guard startDate <= endDate else {
