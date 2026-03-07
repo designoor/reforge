@@ -6,7 +6,6 @@ import SwiftData
 enum BiologicalSexOption: String, CaseIterable, Identifiable {
     case male
     case female
-    case other
 
     var id: String { rawValue }
 
@@ -14,12 +13,11 @@ enum BiologicalSexOption: String, CaseIterable, Identifiable {
         switch self {
         case .male: "Male"
         case .female: "Female"
-        case .other: "Other"
         }
     }
 
     static func from(_ string: String) -> BiologicalSexOption {
-        BiologicalSexOption(rawValue: string) ?? .other
+        BiologicalSexOption(rawValue: string) ?? .male
     }
 }
 
@@ -44,7 +42,7 @@ final class UserProfile {
 
     init(
         dateOfBirth: Date = Date(),
-        biologicalSex: String = "other",
+        biologicalSex: String = "male",
         height: Double = 1.70,
         weight: Double = 70.0,
         unitPreference: String = "metric",

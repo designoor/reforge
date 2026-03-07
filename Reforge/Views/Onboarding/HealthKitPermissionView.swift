@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HealthKitPermissionView: View {
     @Binding var canAdvance: Bool
+    var onGranted: (() -> Void)?
 
     @State private var isRequesting = false
     @State private var hasRequested = false
@@ -12,7 +13,6 @@ struct HealthKitPermissionView: View {
             VStack(spacing: 24) {
                 headerSection
                 categoriesList
-                privacyNote
 
                 if isUnavailable {
                     unavailableMessage
@@ -47,7 +47,7 @@ struct HealthKitPermissionView: View {
             Text("Health Data Access")
                 .font(.largeTitle.bold())
 
-            Text("HealthCoach needs access to your health data to provide personalized insights.")
+            Text("Reforge needs access to your health data to provide personalized insights.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -66,20 +66,6 @@ struct HealthKitPermissionView: View {
             categoryRow(icon: "figure.walk", text: "Mobility")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var privacyNote: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "lock.shield.fill")
-                .foregroundStyle(Color.accentColor)
-                .font(.footnote)
-            Text("Your data stays on your device. Nothing is shared without your knowledge.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .background(Color(.systemGray6))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var grantAccessButton: some View {
@@ -148,10 +134,11 @@ struct HealthKitPermissionView: View {
             isRequesting = false
             hasRequested = true
             canAdvance = true
+            onGranted?()
         }
     }
 }
 
 #Preview {
-    HealthKitPermissionView(canAdvance: .constant(false))
+    HealthKitPermissionView(canAdvance: .constant(false), onGranted: nil)
 }

@@ -7,16 +7,22 @@ import HealthKit
 struct PersonalInfoView: View {
     @Binding var canAdvance: Bool
     @Binding var onAdvanceAction: (() -> Void)?
+    @Binding var isTextFieldFocused: Bool
     @Environment(\.modelContext) private var modelContext
 
     @State private var dateOfBirth: Date = Calendar.current.date(byAdding: .year, value: -30, to: Date()) ?? Date()
-    @State private var biologicalSex: BiologicalSexOption = .other
+    @State private var biologicalSex: BiologicalSexOption = .male
     @State private var unitPreference: UnitPreference = .metric
     @State private var heightCm: String = "170"
     @State private var heightFeet: Int = 5
     @State private var heightInches: Int = 7
     @State private var weightDisplay: String = "70.0"
     @State private var didPreFillFromHealthKit = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field {
+        case height, weight
+    }
 
     private var isFormValid: Bool {
         let hasValidHeight: Bool
@@ -48,7 +54,6 @@ struct PersonalInfoView: View {
 
                 dateOfBirthSection
                 biologicalSexSection
-                unitPreferenceSection
                 heightSection
                 weightSection
             }
@@ -59,6 +64,12 @@ struct PersonalInfoView: View {
         .scrollDismissesKeyboard(.interactively)
         .onAppear {
             unitPreference = Self.localeUnitPreference
+            if unitPreference == .imperial {
+                heightFeet = 5
+                heightInches = 7
+                heightCm = "170"
+                weightDisplay = "154.0"
+            }
             prefillFromHealthKit()
             updateCanAdvance()
             onAdvanceAction = { saveProfile() }
@@ -69,9 +80,8 @@ struct PersonalInfoView: View {
         .onChange(of: heightFeet) { _, _ in updateCanAdvance() }
         .onChange(of: heightInches) { _, _ in updateCanAdvance() }
         .onChange(of: weightDisplay) { _, _ in updateCanAdvance() }
-        .onChange(of: unitPreference) { oldValue, newValue in
-            convertUnitsOnPreferenceChange(from: oldValue, to: newValue)
-            updateCanAdvance()
+        .onChange(of: focusedField) { _, newValue in
+            isTextFieldFocused = newValue != nil
         }
     }
 
@@ -138,19 +148,6 @@ struct PersonalInfoView: View {
         }
     }
 
-    private var unitPreferenceSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Units")
-                .font(.headline)
-
-            Picker("Units", selection: $unitPreference) {
-                Text("Metric").tag(UnitPreference.metric)
-                Text("Imperial").tag(UnitPreference.imperial)
-            }
-            .pickerStyle(.segmented)
-        }
-    }
-
     private var heightSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Height")
@@ -161,6 +158,7 @@ struct PersonalInfoView: View {
                     TextField("Height", text: $heightCm)
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .height)
                     Text("cm")
                         .foregroundStyle(.secondary)
                 }
@@ -187,6 +185,7 @@ struct PersonalInfoView: View {
                 TextField("Weight", text: $weightDisplay)
                     .keyboardType(.decimalPad)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .weight)
                 Text(unitPreference == .metric ? "kg" : "lbs")
                     .foregroundStyle(.secondary)
             }
@@ -225,35 +224,6 @@ struct PersonalInfoView: View {
         }
 
         didPreFillFromHealthKit = didFill
-    }
-
-    private func convertUnitsOnPreferenceChange(from oldUnit: UnitPreference, to newUnit: UnitPreference) {
-        guard oldUnit != newUnit else { return }
-
-        // Convert height
-        if newUnit == .imperial {
-            if let cm = Double(heightCm) {
-                let meters = cm / 100.0
-                let (feet, inches) = UnitConverter.feetInchesFromMeters(meters)
-                heightFeet = feet
-                heightInches = inches
-            }
-        } else {
-            let meters = UnitConverter.metersFromFeetInches(feet: heightFeet, inches: heightInches)
-            let cm = meters * 100.0
-            heightCm = String(format: "%.0f", cm)
-        }
-
-        // Convert weight
-        if let currentWeight = Double(weightDisplay) {
-            if newUnit == .imperial {
-                let lbs = UnitConverter.lbsFromKg(currentWeight)
-                weightDisplay = String(format: "%.1f", lbs)
-            } else {
-                let kg = UnitConverter.kgFromLbs(currentWeight)
-                weightDisplay = String(format: "%.1f", kg)
-            }
-        }
     }
 
     private func updateCanAdvance() {
@@ -303,7 +273,8 @@ struct PersonalInfoView: View {
 #Preview {
     PersonalInfoView(
         canAdvance: .constant(true),
-        onAdvanceAction: .constant(nil)
+        onAdvanceAction: .constant(nil),
+        isTextFieldFocused: .constant(false)
     )
     .modelContainer(for: UserProfile.self, inMemory: true)
 }

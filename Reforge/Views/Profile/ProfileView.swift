@@ -71,7 +71,7 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showSexPicker) {
                 EditSexSheet(
-                    currentSex: profile?.biologicalSex ?? "other",
+                    currentSex: profile?.biologicalSex ?? "male",
                     onSave: { newValue in updateProfile { $0.biologicalSex = newValue } }
                 )
             }
@@ -129,7 +129,7 @@ struct ProfileView: View {
 
             Button { showSexPicker = true } label: {
                 LabeledContent("Biological Sex") {
-                    Text(BiologicalSexOption.from(profile?.biologicalSex ?? "other").displayName)
+                    Text(BiologicalSexOption.from(profile?.biologicalSex ?? "male").displayName)
                         .foregroundStyle(.secondary)
                 }
             }

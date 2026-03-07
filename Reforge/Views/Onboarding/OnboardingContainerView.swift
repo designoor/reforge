@@ -34,6 +34,7 @@ enum OnboardingStep: Int, CaseIterable {
     var nextButtonTitle: String {
         switch self {
         case .welcome: "Get Started"
+        case .notificationPermission: "Finish"
         default: "Next"
         }
     }
@@ -48,6 +49,7 @@ struct OnboardingContainerView: View {
     @State private var canAdvance = true
     @State private var navigationDirection: NavigationDirection = .forward
     @State private var onAdvanceAction: (() -> Void)?
+    @State private var isTextFieldFocused = false
 
     private enum NavigationDirection {
         case forward, backward
@@ -59,17 +61,12 @@ struct OnboardingContainerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if step != .welcome && step != .backfillProgress {
-                progressIndicator
-                    .padding(.top, 8)
-            }
-
             currentStepView
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .transition(transition)
                 .id(currentStep)
 
-            if step.showsNextButton {
+            if step.showsNextButton && !isTextFieldFocused {
                 navigationButtons
                     .padding(.horizontal, 24)
                     .padding(.bottom, 16)
@@ -80,6 +77,9 @@ struct OnboardingContainerView: View {
         }
         .onChange(of: currentStep) { _, newValue in
             appState.currentOnboardingStep = newValue
+            if newValue != OnboardingStep.personalInfo.rawValue {
+                isTextFieldFocused = false
+            }
         }
     }
 
@@ -91,11 +91,11 @@ struct OnboardingContainerView: View {
         case .welcome:
             WelcomeView(canAdvance: $canAdvance)
         case .personalInfo:
-            PersonalInfoView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
+            PersonalInfoView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction, isTextFieldFocused: $isTextFieldFocused)
         case .schedule:
             ScheduleView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .healthKitPermission:
-            HealthKitPermissionView(canAdvance: $canAdvance)
+            HealthKitPermissionView(canAdvance: $canAdvance, onGranted: { goForward() })
         case .apiKey:
             APIKeyView(canAdvance: $canAdvance, onAdvanceAction: $onAdvanceAction)
         case .notificationPermission:
@@ -120,23 +120,47 @@ struct OnboardingContainerView: View {
 
     // MARK: - Navigation
 
+    @ViewBuilder
     private var navigationButtons: some View {
-        HStack {
-            if step.showsBackButton {
-                Button("Back") {
-                    goBack()
-                }
-                .buttonStyle(.bordered)
+        if step == .welcome {
+            Button {
+                goForward()
+            } label: {
+                Text(step.nextButtonTitle)
+                    .frame(maxWidth: .infinity)
             }
-
-            Spacer()
-
-            if (step != .healthKitPermission && step != .apiKey && step != .notificationPermission) || canAdvance {
-                Button(step.nextButtonTitle) {
-                    goForward()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        } else {
+            ZStack {
+                if step != .welcome && step != .backfillProgress {
+                    progressIndicator
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canAdvance)
+
+                HStack {
+                    if step.showsBackButton {
+                        Button("Back") {
+                            goBack()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    Spacer()
+
+                    if step == .notificationPermission && !canAdvance {
+                        Button("Skip") {
+                            canAdvance = true
+                            goForward()
+                        }
+                        .buttonStyle(.bordered)
+                    } else if (step != .healthKitPermission && step != .apiKey && step != .notificationPermission) || canAdvance {
+                        Button(step.nextButtonTitle) {
+                            goForward()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canAdvance)
+                    }
+                }
             }
         }
     }

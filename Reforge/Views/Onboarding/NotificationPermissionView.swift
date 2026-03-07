@@ -10,7 +10,6 @@ struct NotificationPermissionView: View {
     private enum PermissionStatus {
         case granted
         case denied
-        case skipped
     }
 
     var body: some View {
@@ -24,7 +23,6 @@ struct NotificationPermissionView: View {
                     statusMessage(for: status)
                 } else {
                     enableButton
-                    skipButton
                 }
             }
             .padding(.horizontal, 24)
@@ -48,7 +46,7 @@ struct NotificationPermissionView: View {
             Text("Notifications")
                 .font(.largeTitle.bold())
 
-            Text("HealthCoach sends you a daily notification when your health insights are ready.")
+            Text("Reforge sends you a daily notification when your health insights are ready.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -72,7 +70,7 @@ struct NotificationPermissionView: View {
             Image(systemName: "hand.raised.fill")
                 .foregroundStyle(Color.accentColor)
                 .font(.footnote)
-            Text("You can change notification settings at any time in the iOS Settings app.")
+            Text("Notifications are fully customizable in the app.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -99,16 +97,6 @@ struct NotificationPermissionView: View {
         .padding(.top, 8)
     }
 
-    private var skipButton: some View {
-        Button("Skip") {
-            permissionStatus = .skipped
-            canAdvance = true
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .disabled(isRequesting)
-    }
-
     private func statusMessage(for status: PermissionStatus) -> some View {
         HStack(spacing: 8) {
             switch status {
@@ -124,13 +112,6 @@ struct NotificationPermissionView: View {
                     .foregroundStyle(.orange)
                     .font(.title3)
                 Text("Notifications denied — you can enable them later in Settings.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-            case .skipped:
-                Image(systemName: "bell.slash.fill")
-                    .foregroundStyle(.secondary)
-                    .font(.title3)
-                Text("Skipped — you can enable notifications later in Settings.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
